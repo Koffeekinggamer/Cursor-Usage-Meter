@@ -12,6 +12,10 @@
  */
 
 const { loadSkillForCommand } = require("./skills-resolve");
+const {
+  detectAppProfile,
+  formatAutoRouterBlock,
+} = require("./app-profile");
 
 /**
  * @typedef {{
@@ -365,6 +369,7 @@ function contextLines(ctx) {
  *   extra?: string|null,
  *   cwd?: string|null,
  *   projectBlock?: string|null,
+ *   appProfile?: import('./app-profile').AppProfile|null,
  *   loadSkill?: typeof loadSkillForCommand,
  * }} [ctx]
  * @returns {{ prompt: string, skillPath: string|null, skillOk: boolean, skillError?: string }}
@@ -384,11 +389,20 @@ function buildSkillPrompt(stepOrCommand, ctx = {}) {
   const load = ctx.loadSkill || loadSkillForCommand;
   const skillKey = step.skill || command;
   const loaded = load(skillKey);
+  const profile =
+    ctx.appProfile ||
+    detectAppProfile({
+      name: null,
+      description: null,
+      contextExcerpt: ctx.projectBlock || null,
+      cwd: ctx.cwd || null,
+    });
 
   const header = [
     command,
     "",
     "You are executing a **Build-Measure-Learn** step from the Cursor Usage Meter BML coach.",
+    "**Model: Cursor Auto** — pick the right depth and skill version for the detected app profile.",
     "This instance is for **admin / ops credibility work**: any job that must get done through disciplined Build → Measure → Learn.",
     "Follow the installed Matt/Cursor skill definition below **exactly** — do not invent a lighter substitute.",
     "Stay inside the smallest Build that tests the hypothesis; no scope creep.",
@@ -396,6 +410,8 @@ function buildSkillPrompt(stepOrCommand, ctx = {}) {
     "If this skill is user-invoked only, treat this message as an explicit user invocation of " +
       command +
       ".",
+    "",
+    formatAutoRouterBlock(profile, { command }),
     "",
   ];
 

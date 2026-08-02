@@ -8,6 +8,10 @@
 const fs = require("fs");
 const path = require("path");
 const { resolveChatSession } = require("./active-session");
+const {
+  detectAppProfile,
+  formatAutoRouterBlock,
+} = require("./app-profile");
 
 /**
  * @typedef {{
@@ -29,6 +33,7 @@ const { resolveChatSession } = require("./active-session");
  *   buildNatures: string[],
  *   measureNatures: string[],
  *   technicalHints: string[],
+ *   appProfile?: import('./app-profile').AppProfile,
  * }} ProjectContext
  */
 
@@ -291,7 +296,7 @@ function loadProjectAt(cwd, opts = {}) {
   else if (exists(path.join(root, "yarn.lock"))) packageManager = "yarn";
   else if (exists(path.join(root, "package-lock.json"))) packageManager = "npm";
 
-  return {
+  const base = {
     cwd: root,
     name: typeof pkg?.name === "string" ? pkg.name : path.basename(root),
     description: typeof pkg?.description === "string" ? pkg.description : null,
@@ -310,6 +315,10 @@ function loadProjectAt(cwd, opts = {}) {
     buildNatures,
     measureNatures,
     technicalHints,
+  };
+  return {
+    ...base,
+    appProfile: detectAppProfile(base),
   };
 }
 
@@ -374,6 +383,7 @@ function loadActiveProjectContext(opts = {}) {
  */
 function formatProjectContextForPrompt(project) {
   if (!project?.cwd) return "";
+  const profile = project.appProfile || detectAppProfile(project);
   const lines = [
     "## Active chat project (source of Build + Measure nature)",
     project.boundToChat
@@ -382,6 +392,7 @@ function formatProjectContextForPrompt(project) {
     `Path: ${project.cwd}`,
     project.name ? `Name: ${project.name}` : null,
     project.description ? `Description: ${project.description}` : null,
+    `App profile: ${profile.label} (${profile.id})`,
     project.gitRemote ? `Git remote: ${project.gitRemote}` : null,
     project.sessionId
       ? `Cursor workspace: ${project.sessionId}${project.sessionLive ? " (live)" : ""}${project.sessionSource ? ` via ${project.sessionSource}` : ""}`
@@ -435,7 +446,10 @@ function formatProjectContextForPrompt(project) {
     "### Rules",
     "- Build and Measure sections of the experiment ticket MUST reflect this project, not generic advice.",
     "- Prefer existing scripts, modules, and seams listed above.",
-    "- Technical Context / References must @ real folders/files from this tree for /grill-with-docs."
+    "- Technical Context / References must @ real folders/files from this tree for /grill-with-docs.",
+    "- Keep Cursor Usage Meter and Grok 4.5 Usage Meter as separate apps/repos — never mix auth/inject/watcher code.",
+    "",
+    formatAutoRouterBlock(profile)
   );
 
   return lines.join("\n");
@@ -457,22 +471,16 @@ function suggestTechnicalContext(project) {
  * @param {ProjectContext} project
  */
 function isCursorUsageMeterProject(project) {
-  const blob = [
-    project?.name,
-    project?.description,
-    project?.contextExcerpt,
-    project?.readmeExcerpt,
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .toLowerCase();
-  return (
-    /cursor-usage-meter|cursor usage meter/.test(blob) ||
-    (/auto.*usage/.test(blob) &&
-      /api.*usage/.test(blob) &&
-      /meter/.test(blob) &&
-      /reading/.test(blob))
-  );
+  const profile = project?.appProfile || detectAppProfile(project || {});
+  return profile.id === "cursor-usage-meter";
+}
+
+/**
+ * @param {ProjectContext} project
+ */
+function isGrokUsageMeterProject(project) {
+  const profile = project?.appProfile || detectAppProfile(project || {});
+  return profile.id === "grok-usage-meter";
 }
 
 /**
@@ -482,8 +490,12 @@ function isCursorUsageMeterProject(project) {
  * @returns {import('./template').TicketFields}
  */
 function synthesizeTicketFromProject(project) {
-  if (isCursorUsageMeterProject(project)) {
+  const profile = project?.appProfile || detectAppProfile(project || {});
+  if (profile.id === "cursor-usage-meter" || profile.id === "token-usage-meter") {
     return synthesizeMeterTicket(project);
+  }
+  if (profile.id === "grok-usage-meter") {
+    return synthesizeGrokMeterTicket(project);
   }
   return synthesizeGenericTicket(project);
 }
@@ -542,6 +554,47 @@ function synthesizeMeterTicket(project) {
 }
 
 /**
+ * Product experiment for Terminal Grok meter (when that workspace is active).
+ * @param {ProjectContext} project
+ */
+function synthesizeGrokMeterTicket(project) {
+  const tech = [
+    "@CONTEXT.md",
+    "@src/lib/reading.js",
+    "@src/lib/meter-state.js",
+    "@src/lib/face.js",
+    "@src/lib/bml/",
+    "@scripts/watch-grok.js",
+    "@test/",
+    project.cwd ? `(root: ${project.cwd})` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    hypothesis:
+      "Operators running Terminal Grok keep the Grok Meter visible and act on Plan/Ctx Readings — without conflating this app with Cursor Usage Meter.",
+    build:
+      "Ship the smallest Grok-meter reliability path in THIS repo only:\n" +
+      "1) ~/.grok auth → billing/signals → Face → dual needles.\n" +
+      "2) Last-good + fault; single-instance + Watcher with Terminal Grok.\n" +
+      "3) BML inject stays Grok CLI/session cascade — do not port Cursor clipboard as the primary path here unless explicitly requested.\n" +
+      "Keep Cursor-Usage-Meter as a sibling app; do not merge codebases.",
+    measure:
+      "Over 2 weeks of Terminal Grok use: usable Face within 5s on ≥80% sessions; fault <10% without last-good; no Cursor-meter code regressions introduced into this repo.",
+    learn:
+      "Persevere / Pivot / Kill for the Grok overlay. Evidence on the issue. Explicitly note any temptation to merge with Cursor meter and reject it unless product decision says otherwise.",
+    acceptanceCriteria: [
+      "- [ ] npm test green in Grok Usage Meter",
+      "- [ ] Grok Watcher start/stop with Terminal Grok only",
+      "- [ ] Cursor Usage Meter remains a separate repo/process",
+      "- [ ] CONTEXT.md Grok domain terms preserved",
+    ].join("\n"),
+    technicalContext: tech,
+  };
+}
+
+/**
  * Generic admin ticket from project tree + CONTEXT.
  * @param {ProjectContext} project
  */
@@ -586,7 +639,9 @@ module.exports = {
   suggestTechnicalContext,
   synthesizeTicketFromProject,
   isCursorUsageMeterProject,
+  isGrokUsageMeterProject,
   inferBuildNatures,
   inferMeasureNatures,
   excerpt,
+  detectAppProfile,
 };

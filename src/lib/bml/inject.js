@@ -8,13 +8,12 @@ const { getMeterDataDir } = require("../paths");
 /**
  * @typedef {{
  *   ok: boolean,
- *   method: 'clipboard',
+ *   method: 'clipboard'|'sdk-auto'|'unavailable',
  *   detail?: string,
  *   stdout?: string,
  * }} InjectResult
  */
 
-/**
 /** @type {import('child_process').ChildProcess|null} */
 let activeChild = null;
 
@@ -182,13 +181,38 @@ async function injectIntoCursor(prompt, opts = {}) {
   const env = opts.env ?? process.env;
   const run = opts.runCommand || runCommand;
   const copy = opts.copyPrompt || copyPromptToClipboard;
+  const preferCwd = opts.preferCwd || env.CUM_BML_CWD || process.cwd();
+
+  // 1) Optional Cursor SDK on Auto (opt-in: CUM_BML_SDK=1).
+  const wantSdk = env.CUM_BML_SDK === "1" || env.CUM_BML_SDK === "true";
+  if (wantSdk) {
+    try {
+      const { injectViaCursorSdkAuto } = require("./inject-sdk");
+      const sdk = await injectViaCursorSdkAuto(prompt, {
+        cwd: preferCwd,
+        apiKey: env.CURSOR_API_KEY,
+        Agent: opts.Agent,
+      });
+      if (sdk.ok) return sdk;
+    } catch {
+      // fall through to clipboard
+    }
+  }
+
+  // 2) Clipboard + activate Cursor Agent for paste on Auto
   const clip = await copy(prompt, {
     env,
     spawnImpl: opts.spawnImpl,
   });
-  if (!clip.ok || process.platform !== "darwin") return clip;
+  if (!clip.ok || process.platform !== "darwin") {
+    return {
+      ...clip,
+      detail:
+        (clip.detail || "Clipboard inject.") +
+        " Paste into Cursor Agent with model Auto.",
+    };
+  }
 
-  // Cursor activation is best-effort: clipboard success is the primary result.
   const activate = await run(
     "osascript",
     ["-e", 'tell application "Cursor" to activate'],
@@ -202,7 +226,8 @@ async function injectIntoCursor(prompt, opts = {}) {
     method: "clipboard",
     detail:
       (clip.detail || "Copied to clipboard.") +
-      (activate.code === 0 ? " Cursor activated." : ""),
+      (activate.code === 0 ? " Cursor activated." : "") +
+      " Paste into Agent — set model to Auto so it can pick the right app version.",
   };
 }
 

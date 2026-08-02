@@ -582,11 +582,13 @@ function createBmlCoach(opts = {}) {
           jobBrief,
           cwd: preferCwd,
           projectBlock,
+          appProfile: project.appProfile || null,
           extra: [
             chainPos,
             "You are one step in an admin carte-blanche BML skill run. Complete THIS skill fully before stopping.",
             "Do not skip ahead to later chain steps — the coach will invoke those next when auto-running.",
             "Act with full authority to finish the work; prefer decisive implementation over asking permission.",
+            "Use Cursor Auto; choose skill depth for the detected app profile only.",
           ].join("\n"),
         });
         if (!built.skillOk) {
@@ -773,6 +775,7 @@ function createBmlCoach(opts = {}) {
             jobBrief: state.activeIssue?.title,
             cwd: project.cwd,
             projectBlock,
+            appProfile: project.appProfile || null,
           });
           const inTok = estimateTokensFromText(preview.prompt);
           tokensIn += inTok;

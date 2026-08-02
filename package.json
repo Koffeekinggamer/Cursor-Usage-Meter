@@ -10,7 +10,8 @@
     "install-autolaunch": "node scripts/install-autolaunch.js",
     "uninstall-autolaunch": "node scripts/uninstall-autolaunch.js",
     "watch-cursor": "node scripts/watch-cursor.js",
-    "bml-live": "node scripts/bml-live.js"
+    "bml-live": "node scripts/bml-live.js",
+    "bml-run-auto": "node scripts/bml-run-auto.js"
   },
   "engines": {
     "node": ">=18"

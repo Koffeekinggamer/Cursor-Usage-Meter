@@ -11,6 +11,7 @@ const github = require("./github");
 const projectContext = require("./project-context");
 const liveView = require("./live-view");
 const promptLog = require("./prompt-log");
+const appProfile = require("./app-profile");
 
 module.exports = {
   ...template,
@@ -24,4 +25,5 @@ module.exports = {
   ...projectContext,
   ...liveView,
   ...promptLog,
+  ...appProfile,
 };

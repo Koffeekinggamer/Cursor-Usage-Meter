@@ -56,9 +56,15 @@ Matt-pack fallbacks.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
-macOS, and best-effort activates Cursor. Paste it into Cursor Agent with
-**⌘V**. The coach never requires Grok or a Grok CLI. Use `npm run bml-live` to
-inspect persisted BML state and prompts in a terminal.
+macOS, and best-effort activates Cursor. Paste into Cursor Agent with model
+**Auto** (⌘V) — Auto reads the detected **app profile** (Cursor Usage Meter vs
+Grok 4.5 Usage Meter vs generic) and picks the skill/version for that app only.
+
+```bash
+npm run bml-run-auto          # /ask-matt router for the active workspace
+CUM_BML_SDK=1 npm run bml-run-auto   # optional: Cursor SDK model Auto when configured
+npm run bml-live             # inspect persisted BML state / prompts
+```
 
 ## Domain glossary
 

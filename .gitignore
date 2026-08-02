@@ -1,0 +1,8 @@
+node_modules/
+.meter.pid
+.DS_Store
+dist/
+out/
+*.log
+.env
+.env.*

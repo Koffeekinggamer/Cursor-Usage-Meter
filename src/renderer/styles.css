@@ -1,0 +1,475 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+body:active {
+  cursor: grabbing;
+}
+
+body.bml-open {
+  cursor: default;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Dial stays a fixed 200×200 plate in the top-right of the window.
+   Canvas draws the true circle; shell only clips hit-testing / overflow. */
+#shell {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
+  background: transparent;
+  border-radius: 50%;
+  /* Soft drop shadow outside the plate (not a second rim) */
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+}
+
+#gauge {
+  display: block;
+  width: 200px;
+  height: 200px;
+  position: relative;
+  z-index: 1;
+}
+
+#meta {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  /* Centered plate: labels sit mid-lower face under the hub */
+  top: 100px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#label {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+#label .sep {
+  color: #a8a29e;
+  margin: 0 0.12em;
+  font-weight: 600;
+}
+
+#label .pct.cursor {
+  color: #2563eb;
+}
+
+#label .pct.other {
+  color: #1c1917;
+}
+
+#legend {
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+#legend .sep {
+  color: #a8a29e;
+  margin: 0 0.25em;
+}
+
+#legend .leg.cursor {
+  color: #2563eb;
+}
+
+#legend .leg.other {
+  color: #44403c;
+}
+
+#plan {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #78716c;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* BML chip overlaid on the dial face */
+#bmlBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: auto;
+  cursor: default;
+}
+
+#bmlBtn {
+  appearance: none;
+  border: 1px solid rgba(37, 99, 235, 0.5);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d4ed8;
+  font: 700 10px/1 "Avenir Next", "Segoe UI", sans-serif;
+  letter-spacing: 0.14em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+  -webkit-app-region: no-drag;
+}
+
+#bmlBtn:hover,
+#bmlBtn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.chip {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #44403c;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 3px 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* BML Process panel — left of dial, readable spacing */
+#bmlPanel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 212px;
+  bottom: 10px;
+  z-index: 4;
+  padding: 12px 14px 12px;
+  overflow: auto;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(28, 25, 23, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  color: #1c1917;
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+#bmlPanel[hidden],
+.bml-section[hidden] {
+  display: none !important;
+}
+
+.bml-head {
+  display: block;
+  text-align: center;
+  margin: 0;
+  padding-bottom: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.bml-section {
+  margin: 0;
+  padding: 0;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+#bmlBuildSection {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+}
+
+.bml-cost {
+  margin: 0;
+  padding: 6px 8px 2px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #57534e;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+
+.bml-cost.running {
+  color: #1d4ed8;
+}
+
+.bml-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(28, 25, 23, 0.18);
+  background: #f5f5f4;
+  color: #1c1917;
+  font: 600 11px/1.2 "Avenir Next", "Segoe UI", sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.btn:hover {
+  background: #e7e5e4;
+}
+
+.btn.primary {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.btn.danger {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.btn.danger:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.xs {
+  padding: 4px 6px;
+  font-size: 9px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.muted {
+  color: #78716c;
+}
+
+.small {
+  font-size: 10px;
+}
+
+.issue {
+  word-break: break-word;
+  margin: 2px 0 4px;
+}
+
+#bmlPanel textarea,
+#bmlPanel input[type="text"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  border: 1px solid rgba(28, 25, 23, 0.16);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: 400 11px/1.4 "Avenir Next", "Segoe UI", sans-serif;
+  background: #fff;
+  color: #1c1917;
+  resize: vertical;
+  cursor: text;
+  -webkit-app-region: no-drag;
+}
+
+#bmlPanel textarea:focus,
+#bmlPanel input[type="text"]:focus,
+#bmlBtn:focus,
+.btn:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 1px;
+}
+
+.chain {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px 0 0;
+  width: 100%;
+  text-align: left;
+  counter-reset: bml-step;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 160px;
+}
+
+.chain li {
+  counter-increment: bml-step;
+  margin: 0 0 1px;
+  padding: 4px 6px 4px 1.75em;
+  position: relative;
+  color: #44403c;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  transition: color 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+  cursor: pointer;
+  border-radius: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.chain li:hover {
+  background: rgba(28, 25, 23, 0.06);
+  color: #1c1917;
+}
+
+.chain li:active,
+.chain li.running-click {
+  background: rgba(37, 99, 235, 0.16);
+  color: #1d4ed8;
+}
+
+.chain li[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.85;
+}
+
+.chain li::before {
+  content: counter(bml-step) ".";
+  position: absolute;
+  left: 0;
+  width: 1.5em;
+  text-align: right;
+  color: #a8a29e;
+  font-variant-numeric: tabular-nums;
+}
+
+.chain li.active {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 6px;
+}
+
+.chain li.active::before {
+  color: #1d4ed8;
+}
+
+/* Completed skill steps — progress strikethrough */
+.chain li.done {
+  color: #a8a29e;
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+
+.chain li.done::before {
+  text-decoration: none;
+  opacity: 1;
+}
+
+#bmlMeasureSection .row,
+#bmlLearnSection .row {
+  justify-content: center;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #44403c;
+  cursor: pointer;
+}
+
+.notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-height: 72px;
+  overflow: auto;
+  text-align: left;
+}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token Usage Meter</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="shell" title="">
+      <canvas id="gauge" width="200" height="200"></canvas>
+      <div id="meta">
+        <div id="label" aria-live="polite">
+          <span id="cursorPct" class="pct cursor">—</span>
+          <span class="sep">·</span>
+          <span id="otherPct" class="pct other">—</span>
+        </div>
+        <div id="legend" hidden>
+          <span id="legendCursor" class="leg cursor"></span>
+          <span class="sep">·</span>
+          <span id="legendOther" class="leg other"></span>
+        </div>
+        <div id="plan"></div>
+      </div>
+    </div>
+    <script src="paint.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

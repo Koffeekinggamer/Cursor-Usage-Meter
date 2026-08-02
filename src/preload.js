@@ -25,4 +25,31 @@ contextBridge.exposeInMainWorld("tokenMeter", {
   faceFrame(face, angles) {
     return faceFrame(face, angles);
   },
+  bml: {
+    getState: () => ipcRenderer.invoke("bml:getState"),
+    onState(callback) {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on("bml:state", handler);
+      return () => ipcRenderer.removeListener("bml:state", handler);
+    },
+    setPanelOpen: (open) => ipcRenderer.invoke("bml:setPanelOpen", open),
+    togglePanel: () => ipcRenderer.invoke("bml:togglePanel"),
+    setFields: (fields) => ipcRenderer.invoke("bml:setFields", fields),
+    applyProjectToFields: (opts) => ipcRenderer.invoke("bml:applyProjectToFields", opts || {}),
+    selectExperiment: (issueRef) => ipcRenderer.invoke("bml:selectExperiment", issueRef),
+    refreshBoard: () => ipcRenderer.invoke("bml:refreshBoard"),
+    advanceStage: (payload) => ipcRenderer.invoke("bml:advanceStage", payload || {}),
+    runSkillStep: () => ipcRenderer.invoke("bml:runSkillStep"),
+    runOneSkillStep: (index) => ipcRenderer.invoke("bml:runOneSkillStep", index),
+    cancel: () => ipcRenderer.invoke("bml:cancel"),
+    nextSkillStep: () => ipcRenderer.invoke("bml:nextSkillStep"),
+    skipOptionalStep: () => ipcRenderer.invoke("bml:skipOptionalStep"),
+    setTinyBuild: () => ipcRenderer.invoke("bml:setTinyBuild"),
+    setBuildFlags: (flags) => ipcRenderer.invoke("bml:setBuildFlags", flags),
+    setMeasureFlags: (flags) => ipcRenderer.invoke("bml:setMeasureFlags", flags),
+    postMeasure: (note) => ipcRenderer.invoke("bml:postMeasure", note),
+    recordLearn: (payload) => ipcRenderer.invoke("bml:recordLearn", payload),
+    setStep: (index) => ipcRenderer.invoke("bml:setStep", index),
+    openUrl: (url) => ipcRenderer.invoke("bml:openUrl", url),
+  },
 });

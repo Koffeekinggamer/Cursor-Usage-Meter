@@ -3,7 +3,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
-const { getStateDbPath } = require("../src/lib/paths");
+const { getStateDbPath, getCursorUserDataDir, getMeterDataDir } = require("../src/lib/paths");
 
 describe("getStateDbPath", () => {
   it("uses CURSOR_STATE_DB when set", () => {
@@ -60,5 +60,18 @@ describe("getStateDbPath", () => {
         "state.vscdb"
       )
     );
+  });
+});
+
+describe("Cursor data directories", () => {
+  it("honors Cursor and Meter overrides", () => {
+    assert.equal(getCursorUserDataDir({ env: { CURSOR_USER_DATA: "/tmp/cursor" } }), "/tmp/cursor");
+    assert.equal(getMeterDataDir({ env: { CUM_DATA_DIR: "/tmp/meter" } }), "/tmp/meter");
+  });
+
+  it("resolves the macOS application-data paths", () => {
+    const opts = { env: {}, home: "/Users/judson", platform: "darwin" };
+    assert.equal(getCursorUserDataDir(opts), "/Users/judson/Library/Application Support/Cursor");
+    assert.equal(getMeterDataDir(opts), "/Users/judson/Library/Application Support/cursor-usage-meter");
   });
 });

@@ -11,20 +11,45 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="shell" title="">
-      <canvas id="gauge" width="200" height="200"></canvas>
-      <div id="meta">
-        <div id="label" aria-live="polite">
-          <span id="cursorPct" class="pct cursor">—</span>
-          <span class="sep">·</span>
-          <span id="otherPct" class="pct other">—</span>
+    <div id="app">
+      <div id="shell" title="">
+        <canvas id="gauge" width="200" height="200"></canvas>
+        <div id="meta">
+          <div id="label" aria-live="polite">
+            <span id="cursorPct" class="pct cursor">—</span>
+            <span class="sep">·</span>
+            <span id="otherPct" class="pct other">—</span>
+          </div>
+          <div id="legend" hidden>
+            <span id="legendCursor" class="leg cursor"></span>
+            <span class="sep">·</span>
+            <span id="legendOther" class="leg other"></span>
+          </div>
+          <div id="plan"></div>
         </div>
-        <div id="legend" hidden>
-          <span id="legendCursor" class="leg cursor"></span>
-          <span class="sep">·</span>
-          <span id="legendOther" class="leg other"></span>
+        <div id="bmlBar"><button type="button" id="bmlBtn" title="BML Process (active Cursor workspace = experiment)" aria-expanded="false" aria-controls="bmlPanel">BML</button></div>
+      </div>
+      <div id="bmlPanel" hidden>
+        <header class="bml-head"><strong>BML Process</strong></header>
+        <section class="bml-section" id="bmlBuildSection">
+          <ol id="bmlChain" class="chain" aria-label="BML skill chain — click a line to run only that skill"></ol>
+          <p id="bmlCost" class="bml-cost">Est. —</p>
+          <div class="btn-row"><button type="button" id="bmlRun" class="btn primary">Run All</button><button type="button" id="bmlCancel" class="btn danger" hidden>Cancel</button></div>
+        </section>
+        <section class="bml-section" id="bmlMeasureSection">
+          <div class="row"><strong class="small">Measure</strong></div>
+          <input id="mValue" type="text" placeholder="This week value (e.g. 55%)" />
+          <textarea id="mText" rows="2" placeholder="Weekly numbers / notes"></textarea>
+          <div class="btn-row"><button type="button" id="bmlPostMeasure" class="btn primary">Post to issue</button></div>
+          <label class="check"><input type="checkbox" id="mDuration" />Duration elapsed</label>
+          <label class="check"><input type="checkbox" id="mKill" />Kill threshold hit</label>
+          <ul id="mNotes" class="notes muted small"></ul>
+        </section>
+        <section class="bml-section" id="bmlLearnSection">
+          <div class="row"><strong class="small">Learn (light)</strong></div>
+          <div class="btn-row"><button type="button" class="btn ghost" data-learn="persevere">Persevere</button><button type="button" class="btn ghost" data-learn="pivot">Pivot</button><button type="button" class="btn ghost" data-learn="kill-candidate">Kill</button></div>
+          <textarea id="learnEvidence" rows="2" placeholder="Decision + evidence"></textarea>
         </div>
-        <div id="plan"></div>
       </div>
     </div>
     <script src="paint.js"></script>

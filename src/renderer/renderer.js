@@ -8,6 +8,13 @@ const legendEl = document.getElementById("legend");
 const legendCursorEl = document.getElementById("legendCursor");
 const legendOtherEl = document.getElementById("legendOther");
 const shellEl = document.getElementById("shell");
+const bmlBtn = document.getElementById("bmlBtn");
+const bmlPanel = document.getElementById("bmlPanel");
+const bmlChain = document.getElementById("bmlChain");
+const bmlCost = document.getElementById("bmlCost");
+const bmlCancel = document.getElementById("bmlCancel");
+let bml = null;
+let bmlBusy = false;
 
 const DIAL = 200;
 
@@ -42,6 +49,47 @@ let otherNeedle = { angle: -120, velocity: 0 };
 let lastTs = performance.now();
 /** @type {CanvasRenderingContext2D|null} */
 let ctx = null;
+
+function applyBml(view) {
+  if (!view) return;
+  bml = view;
+  bmlPanel.hidden = !view.panelOpen;
+  document.body.classList.toggle("bml-open", Boolean(view.panelOpen));
+  bmlBtn.classList.toggle("active", Boolean(view.panelOpen));
+  bmlBtn.setAttribute("aria-expanded", view.panelOpen ? "true" : "false");
+  bmlCancel.hidden = !(bmlBusy || view?.runCost?.running || view?.canCancel);
+  if (bmlChain) {
+    bmlChain.innerHTML = "";
+    (view.skillChain || []).forEach((step, index) => {
+      const li = document.createElement("li");
+      li.textContent = step.command || step.label || "";
+      li.dataset.stepIndex = String(index);
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      if (step.active) li.classList.add("active");
+      if (step.done) li.classList.add("done");
+      if (bmlBusy) li.setAttribute("aria-disabled", "true");
+      bmlChain.appendChild(li);
+    });
+  }
+  if (bmlCost) bmlCost.textContent = view.costEstimate || "Est. —";
+  const measure = view.measure || {};
+  document.getElementById("mDuration").checked = Boolean(measure.durationElapsed);
+  document.getElementById("mKill").checked = Boolean(measure.killHit);
+  const notes = document.getElementById("mNotes");
+  notes.innerHTML = "";
+  for (const note of measure.weekNotes || []) {
+    const li = document.createElement("li");
+    li.textContent = `${note.value ? `${note.value} — ` : ""}${note.text}`;
+    notes.appendChild(li);
+  }
+  document.getElementById("bmlMeasureSection").hidden = view.stage !== "Measure";
+  document.getElementById("bmlLearnSection").hidden = !["Learn", "Done"].includes(view.stage);
+}
+
+function isInteractiveTarget(target) {
+  return Boolean(target?.closest?.("#bmlBtn, #bmlPanel, button, input, textarea, a, label, select"));
+}
 
 function setupCanvas() {
   if (!canvas) return null;
@@ -125,6 +173,7 @@ let lastX = 0;
 let lastY = 0;
 
 window.addEventListener("pointerdown", (e) => {
+  if (isInteractiveTarget(e.target)) return;
   dragging = true;
   lastX = e.screenX;
   lastY = e.screenY;
@@ -144,12 +193,38 @@ window.addEventListener("pointerup", () => {
   dragging = false;
 });
 
-window.addEventListener("dblclick", () => {
-  window.tokenMeter?.refresh();
+window.addEventListener("dblclick", (e) => {
+  if (isInteractiveTarget(e.target)) return;
+  window.tokenMeter?.refresh()?.then((f) => f && applyFace(f));
 });
+
+function bmlApi() { return window.tokenMeter?.bml; }
+async function runSingleSkill(index) {
+  if (bmlBusy) return;
+  bmlBusy = true;
+  try { applyBml(await bmlApi()?.runOneSkillStep(index)); }
+  finally { bmlBusy = false; }
+}
+bmlBtn?.addEventListener("click", async (e) => { e.stopPropagation(); applyBml(await bmlApi()?.togglePanel()); });
+bmlChain?.addEventListener("click", (e) => {
+  const li = e.target?.closest?.("li[data-step-index]");
+  if (li && li.getAttribute("aria-disabled") !== "true") runSingleSkill(Number(li.dataset.stepIndex));
+});
+document.getElementById("bmlRun")?.addEventListener("click", async () => {
+  if (bmlBusy) return; bmlBusy = true;
+  try { applyBml(await bmlApi()?.runSkillStep()); } finally { bmlBusy = false; }
+});
+bmlCancel?.addEventListener("click", async () => applyBml(await bmlApi()?.cancel()));
+document.getElementById("mDuration")?.addEventListener("change", async (e) => applyBml(await bmlApi()?.setMeasureFlags({ durationElapsed: e.target.checked })));
+document.getElementById("mKill")?.addEventListener("change", async (e) => applyBml(await bmlApi()?.setMeasureFlags({ killHit: e.target.checked })));
+document.getElementById("bmlPostMeasure")?.addEventListener("click", async () => applyBml(await bmlApi()?.postMeasure({ text: document.getElementById("mText").value, value: document.getElementById("mValue").value })));
+for (const btn of document.querySelectorAll("[data-learn]")) btn.addEventListener("click", async () => applyBml(await bmlApi()?.recordLearn({ decision: btn.dataset.learn, evidence: document.getElementById("learnEvidence").value })));
+window.addEventListener("keydown", (e) => { if (e.key === "Escape" && bml?.panelOpen) bmlApi()?.setPanelOpen(false).then(applyBml); });
 
 window.tokenMeter?.onFaceUpdate?.(applyFace);
 window.tokenMeter?.getFace?.().then((payload) => {
   if (payload) applyFace(payload);
 });
+window.tokenMeter?.bml?.onState?.(applyBml);
+window.tokenMeter?.bml?.getState?.().then(applyBml);
 requestAnimationFrame(frame);

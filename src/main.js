@@ -1,7 +1,7 @@
 "use strict";
 
 const path = require("path");
-const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, ipcMain, screen, shell } = require("electron");
 const { takeReading } = require("./lib/reading");
 const {
   emptyMeterState,
@@ -13,12 +13,14 @@ const {
   clearPidFile,
   claimMeterSingleton,
 } = require("./lib/pidfile");
+const { createBmlCoach } = require("./lib/bml/coach");
 
 const POLL_MS = Number(process.env.CUM_POLL_MS) || 60_000;
 const OVERLAY_ASSERT_MS = Number(process.env.CUM_OVERLAY_MS) || 5_000;
 const ROOT = path.join(__dirname, "..");
 const pidFile = defaultPidPath(ROOT);
-const SIZE = 200;
+const COLLAPSED = { width: 200, height: 200 };
+const EXPANDED = { width: 400, height: 480 };
 
 const gotSingletonLock = app.requestSingleInstanceLock();
 if (!gotSingletonLock) {
@@ -30,18 +32,45 @@ let pollTimer = null;
 let overlayTimer = null;
 /** @type {import('./lib/meter-state').MeterState} */
 let meterState = emptyMeterState();
+let bmlCoach = null;
 
-function defaultBounds() {
+function defaultBounds(size = COLLAPSED) {
   const display = screen.getPrimaryDisplay();
   const { x, y, width } = display.workArea;
   const envX = Number(process.env.CUM_X);
   const envY = Number(process.env.CUM_Y);
   return {
-    width: SIZE,
-    height: SIZE,
-    x: Number.isFinite(envX) ? envX : x + width - SIZE - 24,
+    width: size.width,
+    height: size.height,
+    x: Number.isFinite(envX) ? envX : x + width - size.width - 24,
     y: Number.isFinite(envY) ? envY : y + 24,
   };
+}
+
+function applyPanelLayout(panelOpen) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const size = panelOpen ? EXPANDED : COLLAPSED;
+  const [x, y] = mainWindow.getPosition();
+  const [prevW] = mainWindow.getSize();
+  mainWindow.setBounds({
+    x: Math.round(x + prevW - size.width),
+    y: Math.round(y),
+    width: size.width,
+    height: size.height,
+  });
+  try {
+    mainWindow.setFocusable(true);
+    if (panelOpen) {
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    } else {
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed() || bmlCoach?.getState()?.panelOpen) return;
+        try { mainWindow.setFocusable(false); } catch {}
+      }, 150);
+    }
+  } catch {}
+  assertOverlay(mainWindow);
 }
 
 function assertOverlay(win) {
@@ -68,8 +97,13 @@ function publishFace() {
   mainWindow.webContents.send("meter:face", currentFace());
 }
 
+function publishBml(view) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("bml:state", view);
+}
+
 function createWindow() {
-  const bounds = defaultBounds();
+  const bounds = defaultBounds(COLLAPSED);
 
   /** @type {Electron.BrowserWindowConstructorOptions} */
   const opts = {
@@ -110,6 +144,7 @@ function createWindow() {
   mainWindow.webContents.on("did-finish-load", () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     publishFace();
+    if (bmlCoach) publishBml(bmlCoach.getView());
     refreshUsage();
   });
 
@@ -120,12 +155,56 @@ function createWindow() {
     publishFace();
     setTimeout(() => assertOverlay(mainWindow), 250);
     setTimeout(() => assertOverlay(mainWindow), 1000);
+    if (bmlCoach) {
+      const view = bmlCoach.getView();
+      if (view.panelOpen) applyPanelLayout(true);
+      publishBml(view);
+    }
   });
 
   mainWindow.on("blur", () => assertOverlay(mainWindow));
   mainWindow.on("show", () => assertOverlay(mainWindow));
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+}
+
+function registerBmlIpc() {
+  ipcMain.handle("bml:getState", async () => bmlCoach?.getView() || null);
+  ipcMain.handle("bml:setPanelOpen", async (_e, open) => {
+    const view = bmlCoach.setPanelOpen(Boolean(open));
+    applyPanelLayout(view.panelOpen); publishBml(view); return view;
+  });
+  ipcMain.handle("bml:togglePanel", async () => {
+    const view = bmlCoach.togglePanel();
+    applyPanelLayout(view.panelOpen); publishBml(view); return view;
+  });
+  for (const [channel, method] of [
+    ["bml:setFields", "setFields"], ["bml:applyProjectToFields", "applyProjectToFields"],
+    ["bml:selectExperiment", "selectExperiment"], ["bml:setBuildFlags", "setBuildFlags"],
+    ["bml:setMeasureFlags", "setMeasureFlags"], ["bml:setStep", "setStep"],
+  ]) {
+    ipcMain.handle(channel, async (_e, arg) => {
+      const view = await bmlCoach[method](arg || {});
+      publishBml(view); return view;
+    });
+  }
+  ipcMain.handle("bml:refreshBoard", async () => { const v = await bmlCoach.refreshBoard(); publishBml(v); return v; });
+  ipcMain.handle("bml:advanceStage", async (_e, payload) => {
+    const v = await bmlCoach.advanceStage({ fields: payload?.fields || null, skipChain: Boolean(payload?.skipChain), onProgress: publishBml });
+    publishBml(v); return v;
+  });
+  ipcMain.handle("bml:runSkillStep", async () => { const v = await bmlCoach.runAllSkillSteps({ onProgress: publishBml }); publishBml(v); return v; });
+  ipcMain.handle("bml:runOneSkillStep", async (_e, index) => { const v = await bmlCoach.runSkillStep(index, { trackCost: true, onProgress: publishBml }); publishBml(v); return v; });
+  ipcMain.handle("bml:cancel", async () => { const v = bmlCoach.cancelRun(); publishBml(v); return v; });
+  ipcMain.handle("bml:nextSkillStep", async () => { const v = bmlCoach.nextSkillStep(); publishBml(v); return v; });
+  ipcMain.handle("bml:skipOptionalStep", async () => { const v = bmlCoach.skipOptionalStep(); publishBml(v); return v; });
+  ipcMain.handle("bml:setTinyBuild", async () => { const v = bmlCoach.setTinyBuild(); publishBml(v); return v; });
+  ipcMain.handle("bml:postMeasure", async (_e, note) => { const v = await bmlCoach.postMeasure(note || {}); publishBml(v); return v; });
+  ipcMain.handle("bml:recordLearn", async (_e, payload) => { const v = await bmlCoach.recordLearn(payload?.decision, payload?.evidence); publishBml(v); return v; });
+  ipcMain.handle("bml:openUrl", async (_e, url) => {
+    if (!/^https?:\/\//i.test(String(url || ""))) return false;
+    await shell.openExternal(url); return true;
   });
 }
 
@@ -163,7 +242,9 @@ app.whenReady().then(() => {
     }
   }
 
+  bmlCoach = createBmlCoach({ appData: app.getPath("userData") });
   claimMeterSingleton(ROOT, process.pid);
+  registerBmlIpc();
   createWindow();
   startPolling();
   startOverlayAssert();
@@ -182,7 +263,7 @@ app.whenReady().then(() => {
   screen.on("display-metrics-changed", () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (process.env.CUM_X || process.env.CUM_Y) return;
-    mainWindow.setBounds(defaultBounds());
+    mainWindow.setBounds(defaultBounds(bmlCoach?.getState()?.panelOpen ? EXPANDED : COLLAPSED));
     assertOverlay(mainWindow);
   });
 

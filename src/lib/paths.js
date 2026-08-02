@@ -38,4 +38,49 @@ function getStateDbPath(opts = {}) {
   return path.join(configHome, "Cursor", "User", "globalStorage", "state.vscdb");
 }
 
-module.exports = { getStateDbPath };
+/**
+ * Resolve Cursor's user-data directory.
+ * @param {{ home?: string, platform?: NodeJS.Platform, env?: NodeJS.ProcessEnv }} [opts]
+ */
+function getCursorUserDataDir(opts = {}) {
+  const home = opts.home ?? os.homedir();
+  const platform = opts.platform ?? process.platform;
+  const env = opts.env ?? process.env;
+  if (env.CURSOR_USER_DATA) return env.CURSOR_USER_DATA;
+  if (platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "Cursor");
+  }
+  if (platform === "win32") {
+    return path.join(
+      env.APPDATA || path.join(home, "AppData", "Roaming"),
+      "Cursor"
+    );
+  }
+  return path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "Cursor");
+}
+
+/**
+ * Resolve Cursor Usage Meter's application-data directory.
+ * @param {{ home?: string, platform?: NodeJS.Platform, env?: NodeJS.ProcessEnv }} [opts]
+ */
+function getMeterDataDir(opts = {}) {
+  const home = opts.home ?? os.homedir();
+  const platform = opts.platform ?? process.platform;
+  const env = opts.env ?? process.env;
+  if (env.CUM_DATA_DIR) return env.CUM_DATA_DIR;
+  if (platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "cursor-usage-meter");
+  }
+  if (platform === "win32") {
+    return path.join(
+      env.APPDATA || path.join(home, "AppData", "Roaming"),
+      "cursor-usage-meter"
+    );
+  }
+  return path.join(
+    env.XDG_DATA_HOME || path.join(home, ".local", "share"),
+    "cursor-usage-meter"
+  );
+}
+
+module.exports = { getStateDbPath, getCursorUserDataDir, getMeterDataDir };

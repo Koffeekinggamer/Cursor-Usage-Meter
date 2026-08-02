@@ -47,6 +47,19 @@ npm run uninstall-autolaunch
 - Double-click to force a refresh
 - Poll interval: `CUM_POLL_MS` (default `60000`)
 
+## BML skills coach
+
+The optional **BML** button opens a Build–Measure–Learn coach powered by the
+Matt skills pack. It resolves skills from `CUM_SKILLS_ROOT`, project-local
+`.cursor/skills`, `.agents/skills`, or `skills` directories, then compatible
+Matt-pack fallbacks.
+
+Running a skill writes the complete prompt to
+`CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
+macOS, and best-effort activates Cursor. Paste it into Cursor Agent with
+**⌘V**. The coach never requires Grok or a Grok CLI. Use `npm run bml-live` to
+inspect persisted BML state and prompts in a terminal.
+
 ## Domain glossary
 
 See [`CONTEXT.md`](./CONTEXT.md).

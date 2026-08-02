@@ -41,3 +41,21 @@ _Avoid_: Crash, error toast, dialog
 **Watcher**:
 The background process that starts the Meter when Cursor opens and stops it when Cursor closes.
 _Avoid_: Autostart service, daemon, LaunchAgent (implementation detail)
+
+## BML skills coach
+
+**BML coach**:
+The optional Meter panel that organizes Matt skills into a Build–Measure–Learn
+chain for the active Cursor workspace. It is independent of
+Grok-4.5-Usage-Meter.
+
+**Cursor inject**:
+The coach saves each prompt in Cursor Usage Meter app data (or
+`CUM_COPY_FILE`), copies it to the macOS clipboard, and may activate Cursor.
+The operator pastes it into Cursor Agent with ⌘V; there is no Cursor CLI
+automation path.
+
+**Skill roots**:
+`CUM_SKILLS_ROOT`, `.cursor/skills`, `.agents/skills`, and `skills` in the
+active workspace are preferred, followed by compatible Matt-pack and Grok
+skill fallback directories.

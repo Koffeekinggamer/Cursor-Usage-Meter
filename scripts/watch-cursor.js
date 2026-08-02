@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Keep the Token Usage Meter in sync with Cursor:
+ * Keep the Cursor Usage Meter in sync with Cursor:
  * start when Cursor opens, quit when Cursor closes.
  */
 
@@ -11,14 +11,15 @@ const path = require("path");
 const { syncMeterWithCursor } = require("../src/lib/watcher");
 const {
   defaultPidPath,
-  readPidFile,
   clearPidFile,
+  findMeterPids,
+  killOtherMeterInstances,
   isPidAlive,
 } = require("../src/lib/pidfile");
 
 const ROOT = path.join(__dirname, "..");
-const INTERVAL_MS = Number(process.env.TUM_WATCH_MS) || 5000;
-const START_COOLDOWN_MS = Number(process.env.TUM_START_COOLDOWN_MS) || 15_000;
+const INTERVAL_MS = Number(process.env.CUM_WATCH_MS) || 5000;
+const START_COOLDOWN_MS = Number(process.env.CUM_START_COOLDOWN_MS) || 8_000;
 const pidFile = defaultPidPath(ROOT);
 
 function resolveElectronBinary() {
@@ -63,22 +64,7 @@ function isCursorRunning() {
 }
 
 function meterPids() {
-  const pids = new Set();
-  const fromFile = readPidFile(pidFile);
-  if (fromFile != null && isPidAlive(fromFile)) pids.add(fromFile);
-
-  try {
-    const out = execFileSync("pgrep", ["-fl", "Electron"], { encoding: "utf8" });
-    for (const line of out.split("\n")) {
-      if (!line.includes(ROOT)) continue;
-      if (!/Electron\.app\/Contents\/MacOS\/Electron/.test(line)) continue;
-      const pid = Number(line.trim().split(/\s+/)[0]);
-      if (Number.isFinite(pid)) pids.add(pid);
-    }
-  } catch {
-    // none
-  }
-  return [...pids];
+  return findMeterPids(ROOT, { selfPid: process.pid });
 }
 
 function isMeterRunning() {
@@ -92,8 +78,17 @@ function startMeter() {
   if (now - lastStartAt < START_COOLDOWN_MS) return;
   lastStartAt = now;
 
+  const extras = meterPids();
+  if (extras.length > 1) {
+    killOtherMeterInstances(ROOT, { selfPid: extras[0] });
+  }
+  if (isMeterRunning()) {
+    console.log("Meter already running — skip spawn");
+    return;
+  }
+
   const electronBin = resolveElectronBinary();
-  const env = { ...process.env, TUM_METER: "1" };
+  const env = { ...process.env, CUM_METER: "1" };
   delete env.ELECTRON_RUN_AS_NODE;
 
   const child = spawn(electronBin, ["."], {
@@ -103,7 +98,7 @@ function startMeter() {
     env,
   });
   child.unref();
-  console.log(`spawned Meter (launcher pid=${child.pid})`);
+  console.log(`spawned Cursor Meter (launcher pid=${child.pid})`);
 }
 
 function stopMeter() {
@@ -111,9 +106,22 @@ function stopMeter() {
   for (const pid of pids) {
     try {
       process.kill(pid, "SIGTERM");
-      console.log(`stopped Meter pid=${pid}`);
+      console.log(`stopped Cursor Meter pid=${pid}`);
     } catch (err) {
-      console.log(`stop Meter pid=${pid} failed: ${err.message}`);
+      console.log(`stop Cursor Meter pid=${pid} failed: ${err.message}`);
+    }
+  }
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline) {
+    if (pids.every((p) => !isPidAlive(p))) break;
+  }
+  for (const pid of pids) {
+    if (isPidAlive(pid)) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // ignore
+      }
     }
   }
   clearPidFile(pidFile);
@@ -127,10 +135,13 @@ function tick() {
     stopMeter,
   });
   if (result === "started" || result === "stopped") {
-    console.log(`syncMeterWithCursor → ${result}`);
+    console.log(
+      `syncMeterWithCursor → ${result} (cursor=${isCursorRunning()} meter=${isMeterRunning()})`
+    );
   }
 }
 
 console.log("watching for Cursor (start on open, stop on close)…");
+console.log(`root=${ROOT} interval=${INTERVAL_MS}ms`);
 tick();
 setInterval(tick, INTERVAL_MS);

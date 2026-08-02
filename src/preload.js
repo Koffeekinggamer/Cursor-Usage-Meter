@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld("tokenMeter", {
     ipcRenderer.on("meter:face", handler);
     return () => ipcRenderer.removeListener("meter:face", handler);
   },
+  getFace() {
+    return ipcRenderer.invoke("meter:getFace");
+  },
   refresh() {
     return ipcRenderer.invoke("usage:refresh");
   },

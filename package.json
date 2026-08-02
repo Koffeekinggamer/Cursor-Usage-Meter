@@ -1,7 +1,7 @@
 {
-  "name": "token-usage-meter",
+  "name": "cursor-usage-meter",
   "version": "1.0.0",
-  "description": "Always-on-top analog needle overlay for Cursor usage",
+  "description": "Always-on-top analog needle overlay for Cursor plan usage",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {

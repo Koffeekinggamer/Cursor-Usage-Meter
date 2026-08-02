@@ -1,7 +1,6 @@
 "use strict";
 
 const canvas = document.getElementById("gauge");
-const ctx = canvas.getContext("2d");
 const cursorPctEl = document.getElementById("cursorPct");
 const otherPctEl = document.getElementById("otherPct");
 const planEl = document.getElementById("plan");
@@ -10,40 +9,89 @@ const legendCursorEl = document.getElementById("legendCursor");
 const legendOtherEl = document.getElementById("legendOther");
 const shellEl = document.getElementById("shell");
 
-let face = null;
+const DIAL = 200;
+
+/** Idle face so the dial paints immediately (never a transparent hole). */
+const IDLE_FACE = {
+  cursor: {
+    percent: 0,
+    label: "—",
+    targetAngle: -120,
+    color: "#2563eb",
+    arcColor: "#2563eb",
+  },
+  other: {
+    percent: 0,
+    label: "—",
+    targetAngle: -120,
+    color: "#1c1917",
+    arcColor: "#2f6f4e",
+  },
+  plan: "",
+  legend: { cursor: "Auto", other: "API" },
+  legendText: "Auto · API",
+  titleHint: "Cursor Usage Meter",
+  showingLastGood: false,
+  hasFault: false,
+  account: "",
+};
+
+let face = IDLE_FACE;
 let cursorNeedle = { angle: -120, velocity: 0 };
 let otherNeedle = { angle: -120, velocity: 0 };
 let lastTs = performance.now();
+/** @type {CanvasRenderingContext2D|null} */
+let ctx = null;
+
+function setupCanvas() {
+  if (!canvas) return null;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.round(DIAL * dpr);
+  canvas.height = Math.round(DIAL * dpr);
+  canvas.style.width = `${DIAL}px`;
+  canvas.style.height = `${DIAL}px`;
+  const c = canvas.getContext("2d", { alpha: true });
+  if (!c) return null;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return c;
+}
+
+ctx = setupCanvas();
 
 function frame(ts) {
   const dt = Math.min(0.05, (ts - lastTs) / 1000);
   lastTs = ts;
 
-  if (!window.tokenMeter?.stepNeedle || !window.tokenMeter?.faceFrame) {
-    requestAnimationFrame(frame);
-    return;
-  }
-
+  if (!ctx) ctx = setupCanvas();
   const draw = globalThis.MeterPaint?.drawMeterFace;
-  if (face && draw) {
+  const active = face || IDLE_FACE;
+
+  if (
+    draw &&
+    canvas &&
+    ctx &&
+    window.tokenMeter?.stepNeedle &&
+    window.tokenMeter?.faceFrame
+  ) {
     cursorNeedle = window.tokenMeter.stepNeedle(
       cursorNeedle,
-      face.cursor.targetAngle,
+      active.cursor.targetAngle,
       dt
     );
     otherNeedle = window.tokenMeter.stepNeedle(
       otherNeedle,
-      face.other.targetAngle,
+      active.other.targetAngle,
       dt
     );
-    const paintFrame = window.tokenMeter.faceFrame(face, {
+    const paintFrame = window.tokenMeter.faceFrame(active, {
       cursor: cursorNeedle.angle,
       other: otherNeedle.angle,
     });
-    draw(ctx, paintFrame, {
-      width: canvas.width,
-      height: canvas.height,
-    });
+    try {
+      draw(ctx, paintFrame, { width: DIAL, height: DIAL });
+    } catch (err) {
+      console.error("Meter paint failed", err);
+    }
   }
 
   requestAnimationFrame(frame);
@@ -101,4 +149,7 @@ window.addEventListener("dblclick", () => {
 });
 
 window.tokenMeter?.onFaceUpdate?.(applyFace);
+window.tokenMeter?.getFace?.().then((payload) => {
+  if (payload) applyFace(payload);
+});
 requestAnimationFrame(frame);

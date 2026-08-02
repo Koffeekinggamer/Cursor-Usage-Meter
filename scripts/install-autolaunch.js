@@ -7,13 +7,14 @@ const { execFileSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const nodeBin =
+  process.env.CUM_NODE ||
   process.env.TUM_NODE ||
   process.execPath ||
   "/usr/local/bin/node";
 const watchScript = path.join(ROOT, "scripts", "watch-cursor.js");
 
 function installMac() {
-  const label = "com.token-usage-meter.cursor-watch";
+  const label = "com.cursor-usage-meter.cursor-watch";
   const agentsDir = path.join(os.homedir(), "Library", "LaunchAgents");
   const plistPath = path.join(agentsDir, `${label}.plist`);
   fs.mkdirSync(agentsDir, { recursive: true });
@@ -35,10 +36,17 @@ function installMac() {
   <true/>
   <key>WorkingDirectory</key>
   <string>${ROOT}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${path.dirname(nodeBin)}:/Users/${os.userInfo().username}/.local/node/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    <key>CUM_METER_ROOT</key>
+    <string>${ROOT}</string>
+  </dict>
   <key>StandardOutPath</key>
-  <string>${path.join(os.tmpdir(), "token-usage-meter-watch.log")}</string>
+  <string>${path.join(os.tmpdir(), "cursor-usage-meter-watch.log")}</string>
   <key>StandardErrorPath</key>
-  <string>${path.join(os.tmpdir(), "token-usage-meter-watch.err")}</string>
+  <string>${path.join(os.tmpdir(), "cursor-usage-meter-watch.err")}</string>
 </dict>
 </plist>
 `;
@@ -50,19 +58,19 @@ function installMac() {
     // not loaded yet
   }
   execFileSync("launchctl", ["load", plistPath], { stdio: "inherit" });
-  console.log(`Installed LaunchAgent: ${plistPath}`);
-  console.log("Meter will auto-start when Cursor is open.");
+  console.log(`Installed Watcher auto-start: ${plistPath}`);
+  console.log("Meter overlays when Cursor is open and quits when Cursor closes.");
 }
 
 function installLinux() {
   const dir = path.join(os.homedir(), ".config", "autostart");
   fs.mkdirSync(dir, { recursive: true });
-  const desktop = path.join(dir, "token-usage-meter.desktop");
+  const desktop = path.join(dir, "cursor-usage-meter.desktop");
   fs.writeFileSync(
     desktop,
     `[Desktop Entry]
 Type=Application
-Name=Token Usage Meter
+Name=Cursor Usage Meter
 Exec=${nodeBin} ${watchScript}
 X-GNOME-Autostart-enabled=true
 `

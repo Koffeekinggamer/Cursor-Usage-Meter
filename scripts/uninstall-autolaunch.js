@@ -6,7 +6,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 
 if (process.platform === "darwin") {
-  const label = "com.token-usage-meter.cursor-watch";
+  const label = "com.cursor-usage-meter.cursor-watch";
   const plistPath = path.join(
     os.homedir(),
     "Library",
@@ -25,7 +25,7 @@ if (process.platform === "darwin") {
     os.homedir(),
     ".config",
     "autostart",
-    "token-usage-meter.desktop"
+    "cursor-usage-meter.desktop"
   );
   if (fs.existsSync(desktop)) fs.unlinkSync(desktop);
   console.log("Removed autostart entry");

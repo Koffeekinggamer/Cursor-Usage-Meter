@@ -47,7 +47,7 @@ async function openStateDbCopy(dbPath) {
   });
   const tmp = path.join(
     os.tmpdir(),
-    `token-usage-meter-${process.pid}-${Date.now()}.vscdb`
+    `cursor-usage-meter-${process.pid}-${Date.now()}.vscdb`
   );
   fs.copyFileSync(dbPath, tmp);
   try {

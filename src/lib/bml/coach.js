@@ -1129,6 +1129,8 @@ function createBmlCoach(opts = {}) {
             : "";
         const projNote = ` project=${preferCwd}`;
         const chainNote = meta.chainPos ? ` ${meta.chainPos}` : "";
+        // Keep paths out of the UI status; stash on the result for debugging only.
+        const debugNote = `${skillNote}${projNote}${chainNote}`.trim();
         dispatch({
           type: "inject/result",
           ok: result.ok,
@@ -1137,7 +1139,9 @@ function createBmlCoach(opts = {}) {
           stepIndex: meta.stepIndex ?? null,
           command: meta.command || null,
           continueChain: Boolean(meta.continueChain),
-          detail: `${result.detail || ""}${skillNote}${projNote}${chainNote}`.trim(),
+          detail: result.ok
+            ? result.detail || "Prompt copied."
+            : `${result.detail || "Inject failed."}${debugNote ? ` ${debugNote}` : ""}`.trim(),
         });
         return getView();
       } catch (err) {

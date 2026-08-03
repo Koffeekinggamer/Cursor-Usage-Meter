@@ -85,12 +85,16 @@ function applyBml(view) {
   if (bmlConfirm) bmlConfirm.hidden = !awaiting;
   if (bmlRun) bmlRun.hidden = awaiting;
   if (bmlStatus) {
-    const text = shortenBmlStatus(
-      view.injectStatus || view.lastInject?.detail || ""
-    );
+    // Clipboard/confirm guidance is the Continue button — don't dump paths here.
+    const raw = awaiting
+      ? ""
+      : view.lastError ||
+        (view.lastInject?.ok === false ? view.lastInject?.detail : "") ||
+        "";
+    const text = shortenBmlStatus(raw);
     bmlStatus.hidden = !text;
     bmlStatus.textContent = text;
-    bmlStatus.title = view.injectStatus || view.lastInject?.detail || "";
+    bmlStatus.title = text;
   }
   if (bmlChain) {
     bmlChain.innerHTML = "";

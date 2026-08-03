@@ -153,7 +153,8 @@ async function copyPromptToClipboard(prompt, opts = {}) {
       return {
         ok: true,
         method: "clipboard",
-        detail: `Copied to clipboard (backup: ${copyPath}). Paste into Cursor Agent (⌘V).`,
+        needsConfirm: true,
+        detail: `Copied to clipboard (backup: ${copyPath}). Paste into Cursor Agent (⌘V), let Auto finish the skill, then click Continue.`,
       };
     }
   }
@@ -161,7 +162,8 @@ async function copyPromptToClipboard(prompt, opts = {}) {
   return {
     ok: true,
     method: "clipboard",
-    detail: `Prompt saved to ${copyPath}. Paste into Cursor Agent (⌘V).`,
+    needsConfirm: true,
+    detail: `Prompt saved to ${copyPath}. Paste into Cursor Agent (⌘V), let Auto finish, then click Continue.`,
   };
 }
 
@@ -207,9 +209,10 @@ async function injectIntoCursor(prompt, opts = {}) {
   if (!clip.ok || process.platform !== "darwin") {
     return {
       ...clip,
+      needsConfirm: Boolean(clip.ok),
       detail:
         (clip.detail || "Clipboard inject.") +
-        " Paste into Cursor Agent with model Auto.",
+        " Paste into Cursor Agent with model Auto, then click Continue.",
     };
   }
 
@@ -224,10 +227,11 @@ async function injectIntoCursor(prompt, opts = {}) {
   return {
     ...clip,
     method: "clipboard",
+    needsConfirm: true,
     detail:
       (clip.detail || "Copied to clipboard.") +
       (activate.code === 0 ? " Cursor activated." : "") +
-      " Paste into Agent — set model to Auto so it can pick the right app version.",
+      " Paste into Agent (Auto), wait for the skill to finish, then click Continue.",
   };
 }
 

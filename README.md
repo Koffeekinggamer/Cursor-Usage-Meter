@@ -56,9 +56,10 @@ Matt-pack fallbacks.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
-macOS, and best-effort activates Cursor. Paste into Cursor Agent with model
-**Auto** (⌘V) — Auto reads the detected **app profile** (Cursor Usage Meter vs
-Grok 4.5 Usage Meter vs generic) and picks the skill/version for that app only.
+macOS, and best-effort activates Cursor. **Clipboard is not the Agent** — the
+checklist pauses after each copy. Paste into Cursor Agent with model **Auto**,
+wait for that skill to finish, then click **Continue**. Only then is the step
+marked done and the next prompt copied.
 
 ```bash
 npm run bml-run-auto          # /ask-matt router for the active workspace

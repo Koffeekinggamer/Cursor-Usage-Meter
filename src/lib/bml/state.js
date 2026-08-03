@@ -414,6 +414,12 @@ function reduceBmlState(previous, action) {
           ok: Boolean(action.ok),
           method: String(action.method || "unknown"),
           detail: action.detail != null ? String(action.detail) : undefined,
+          needsConfirm: Boolean(action.needsConfirm),
+          stepIndex:
+            action.stepIndex == null ? null : Number(action.stepIndex),
+          command:
+            action.command != null ? String(action.command) : undefined,
+          continueChain: Boolean(action.continueChain),
         },
         lastError: action.ok
           ? null

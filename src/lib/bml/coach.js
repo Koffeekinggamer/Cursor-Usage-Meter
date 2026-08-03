@@ -208,6 +208,8 @@ function createBmlCoach(opts = {}) {
       liveElapsedMs: rc.running ? liveElapsedMs : rc.lastDurationMs || 0,
       canCancel: Boolean(rc.running) || cancelRequested,
       cancelRequested,
+      awaitingConfirm: Boolean(state.lastInject?.needsConfirm),
+      injectStatus: state.lastInject?.detail || null,
       jobBrief:
         state.fields?.hypothesis ||
         state.activeIssue?.title ||
@@ -487,7 +489,7 @@ function createBmlCoach(opts = {}) {
     /**
      * Run a single skill at `index` (defaults to current buildStepIndex).
      * @param {number} [index]
-     * @param {{ trackCost?: boolean, onProgress?: (view: object) => void }} [opts]
+     * @param {{ trackCost?: boolean, onProgress?: (view: object) => void, continueChain?: boolean }} [opts]
      */
     async runSkillStep(index, opts = {}) {
       const i =
@@ -495,6 +497,7 @@ function createBmlCoach(opts = {}) {
           ? index
           : state.buildStepIndex;
       const trackCost = opts.trackCost !== false;
+      const continueChain = Boolean(opts.continueChain);
       const onProgress =
         typeof opts.onProgress === "function" ? opts.onProgress : null;
       // When chain already owns running, do not re-open solo cost accounting
@@ -567,6 +570,7 @@ function createBmlCoach(opts = {}) {
               stepIndex: i,
               command: step?.command,
               label: step?.label,
+              continueChain,
             });
             return finishSolo({
               cancelled: cancelRequested || state.lastInject?.method === "cancel",
@@ -610,6 +614,7 @@ function createBmlCoach(opts = {}) {
           stepIndex: i,
           command: step?.command,
           label: step?.label,
+          continueChain,
         });
       } catch (err) {
         if (!cancelRequested) {
@@ -655,8 +660,8 @@ function createBmlCoach(opts = {}) {
                 lastTokensEst: inTok + Math.round(EST_TOKENS_PER_SKILL * 0.55),
               },
             });
-            if (state.lastInject?.ok) {
-              // Mark this skill done if inject succeeded
+            if (state.lastInject?.ok && !state.lastInject?.needsConfirm) {
+              // Mark this skill done only when inject actually finished work
               dispatch({ type: "build/step", index: i + 1 });
             }
           }
@@ -785,6 +790,7 @@ function createBmlCoach(opts = {}) {
           await this.runSkillStep(i, {
             trackCost: false,
             onProgress,
+            continueChain: true,
           });
           if (cancelRequested) {
             cancelled = true;
@@ -795,6 +801,9 @@ function createBmlCoach(opts = {}) {
               ok: false,
             });
             break;
+          }
+          if (state.lastInject?.needsConfirm) {
+            // Handled below after try/catch via needsConfirm branch
           }
         } catch (err) {
           if (!cancelRequested) {
@@ -815,7 +824,37 @@ function createBmlCoach(opts = {}) {
           ok: Boolean(state.lastInject?.ok),
         });
 
-        // Mark this skill completed → strikethrough (done: i < index)
+        // Clipboard paste is not real work — pause for user confirmation.
+        if (state.lastInject?.needsConfirm) {
+          dispatch({
+            type: "inject/result",
+            ok: true,
+            method: state.lastInject.method || "clipboard",
+            needsConfirm: true,
+            continueChain: true,
+            stepIndex: i,
+            command: step?.command,
+            detail:
+              (state.lastInject.detail || "Prompt copied.") +
+              ` Pause: paste into Cursor Agent (Auto), wait until that skill finishes, then click Continue (${i + 1}/${SKILL_CHAIN.length}).`,
+          });
+          dispatch({
+            type: "run/cost",
+            patch: {
+              running: false,
+              step: i + 1,
+              total: SKILL_CHAIN.length,
+              startedAt: null,
+              elapsedMs: Date.now() - startedAt,
+              tokensIn,
+              tokensOutEst,
+            },
+          });
+          if (onProgress) onProgress(getView());
+          return getView();
+        }
+
+        // Real inject (e.g. SDK) finished — mark completed → strikethrough
         dispatch({ type: "build/step", index: i + 1 });
         dispatch({
           type: "run/cost",
@@ -997,7 +1036,11 @@ function createBmlCoach(opts = {}) {
           type: "inject/result",
           ok: result.ok,
           method: result.method,
-          detail: `${result.detail || ""}${skillNote}${projNote}${chainNote} · carte-blanche`.trim(),
+          needsConfirm: Boolean(result.needsConfirm),
+          stepIndex: meta.stepIndex ?? null,
+          command: meta.command || null,
+          continueChain: Boolean(meta.continueChain),
+          detail: `${result.detail || ""}${skillNote}${projNote}${chainNote}`.trim(),
         });
         return getView();
       } catch (err) {
@@ -1067,6 +1110,64 @@ function createBmlCoach(opts = {}) {
           message: err instanceof Error ? err.message : String(err),
         });
       }
+    },
+
+    /**
+     * After clipboard paste: mark the waiting skill done, optionally copy the next one.
+     * @param {{
+     *   continueChain?: boolean,
+     *   onProgress?: (view: object) => void,
+     * }} [opts]
+     */
+    async confirmInjectedStep(opts = {}) {
+      const onProgress =
+        typeof opts.onProgress === "function" ? opts.onProgress : null;
+      const li = state.lastInject;
+      if (!li?.needsConfirm) {
+        return dispatch({
+          type: "error",
+          message: "Nothing waiting on paste confirmation.",
+        });
+      }
+
+      const i =
+        Number.isInteger(li.stepIndex) && li.stepIndex >= 0
+          ? li.stepIndex
+          : state.buildStepIndex;
+      const continueChain = opts.continueChain !== false && li.continueChain !== false;
+
+      // User affirms Agent finished this skill — now strikethrough it
+      dispatch({ type: "build/step", index: i + 1 });
+      dispatch({
+        type: "inject/result",
+        ok: true,
+        method: "confirmed",
+        needsConfirm: false,
+        stepIndex: i,
+        command: li.command,
+        detail: `Confirmed ${li.command || `step ${i + 1}`} done.`,
+      });
+
+      if (!continueChain || i + 1 >= SKILL_CHAIN.length) {
+        dispatch({
+          type: "run/cost",
+          patch: {
+            running: false,
+            step: Math.min(i + 1, SKILL_CHAIN.length),
+            total: SKILL_CHAIN.length,
+            startedAt: null,
+          },
+        });
+        if (onProgress) onProgress(getView());
+        return getView();
+      }
+
+      // Copy the next skill and pause again for paste
+      return this.runSkillStep(i + 1, {
+        trackCost: true,
+        onProgress,
+        continueChain: true,
+      });
     },
   };
 }

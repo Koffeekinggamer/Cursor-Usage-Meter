@@ -13,6 +13,7 @@ const {
   clearPidFile,
   claimMeterSingleton,
 } = require("./lib/pidfile");
+const { nextDragPosition } = require("./lib/drag-position");
 const { createBmlCoach } = require("./lib/bml/coach");
 
 const POLL_MS = Number(process.env.CUM_POLL_MS) || 60_000;
@@ -195,7 +196,15 @@ function registerBmlIpc() {
     publishBml(v); return v;
   });
   ipcMain.handle("bml:runSkillStep", async () => { const v = await bmlCoach.runAllSkillSteps({ onProgress: publishBml }); publishBml(v); return v; });
-  ipcMain.handle("bml:runOneSkillStep", async (_e, index) => { const v = await bmlCoach.runSkillStep(index, { trackCost: true, onProgress: publishBml }); publishBml(v); return v; });
+  ipcMain.handle("bml:runOneSkillStep", async (_e, index) => { const v = await bmlCoach.runSkillStep(index, { trackCost: true, onProgress: publishBml, continueChain: false }); publishBml(v); return v; });
+  ipcMain.handle("bml:confirmInjectedStep", async (_e, payload) => {
+    const v = await bmlCoach.confirmInjectedStep({
+      continueChain: payload?.continueChain !== false,
+      onProgress: publishBml,
+    });
+    publishBml(v);
+    return v;
+  });
   ipcMain.handle("bml:cancel", async () => { const v = bmlCoach.cancelRun(); publishBml(v); return v; });
   ipcMain.handle("bml:nextSkillStep", async () => { const v = bmlCoach.nextSkillStep(); publishBml(v); return v; });
   ipcMain.handle("bml:skipOptionalStep", async () => { const v = bmlCoach.skipOptionalStep(); publishBml(v); return v; });
@@ -297,9 +306,15 @@ ipcMain.handle("usage:refresh", async () => {
 
 ipcMain.handle("meter:getFace", async () => currentFace());
 
-ipcMain.on("window:drag", (_event, { dx, dy }) => {
+ipcMain.on("window:drag", (_event, payload) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const [x, y] = mainWindow.getPosition();
-  mainWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
-  assertOverlay(mainWindow);
+  try {
+    const [x, y] = mainWindow.getPosition();
+    const next = nextDragPosition(x, y, payload?.dx, payload?.dy);
+    if (!next) return;
+    mainWindow.setPosition(next.x, next.y);
+    assertOverlay(mainWindow);
+  } catch {
+    // Never let a bad drag / native conversion kill the main process.
+  }
 });

@@ -34,7 +34,16 @@
         <section class="bml-section" id="bmlBuildSection">
           <ol id="bmlChain" class="chain" aria-label="BML skill chain — click a line to run only that skill"></ol>
           <p id="bmlCost" class="bml-cost">Est. —</p>
-          <div class="btn-row"><button type="button" id="bmlRun" class="btn primary">Run All</button><button type="button" id="bmlCancel" class="btn danger" hidden>Cancel</button></div>
+          <p id="bmlStatus" class="bml-status muted small" hidden></p>
+          <div class="btn-row">
+            <button type="button" id="bmlRun" class="btn primary" title="Copy the first/next skill prompt — paste into Cursor Agent (Auto)">
+              Copy next
+            </button>
+            <button type="button" id="bmlConfirm" class="btn primary" hidden title="Mark this skill done after Agent finishes, then copy the next">
+              Continue
+            </button>
+            <button type="button" id="bmlCancel" class="btn danger" hidden>Cancel</button>
+          </div>
         </section>
         <section class="bml-section" id="bmlMeasureSection">
           <div class="row"><strong class="small">Measure</strong></div>

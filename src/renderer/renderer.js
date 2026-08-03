@@ -58,6 +58,17 @@ function applyBml(view) {
   bmlBtn.classList.toggle("active", Boolean(view.panelOpen));
   bmlBtn.setAttribute("aria-expanded", view.panelOpen ? "true" : "false");
   bmlCancel.hidden = !(bmlBusy || view?.runCost?.running || view?.canCancel);
+  const bmlConfirm = document.getElementById("bmlConfirm");
+  const bmlRun = document.getElementById("bmlRun");
+  const bmlStatus = document.getElementById("bmlStatus");
+  const awaiting = Boolean(view.awaitingConfirm);
+  if (bmlConfirm) bmlConfirm.hidden = !awaiting;
+  if (bmlRun) bmlRun.hidden = awaiting;
+  if (bmlStatus) {
+    const text = view.injectStatus || view.lastInject?.detail || "";
+    bmlStatus.hidden = !text;
+    bmlStatus.textContent = text;
+  }
   if (bmlChain) {
     bmlChain.innerHTML = "";
     (view.skillChain || []).forEach((step, index) => {
@@ -68,7 +79,7 @@ function applyBml(view) {
       li.setAttribute("role", "button");
       if (step.active) li.classList.add("active");
       if (step.done) li.classList.add("done");
-      if (bmlBusy) li.setAttribute("aria-disabled", "true");
+      if (bmlBusy || awaiting) li.setAttribute("aria-disabled", "true");
       bmlChain.appendChild(li);
     });
   }
@@ -174,6 +185,7 @@ let lastY = 0;
 
 window.addEventListener("pointerdown", (e) => {
   if (isInteractiveTarget(e.target)) return;
+  if (!Number.isFinite(e.screenX) || !Number.isFinite(e.screenY)) return;
   dragging = true;
   lastX = e.screenX;
   lastY = e.screenY;
@@ -182,8 +194,10 @@ window.addEventListener("pointerdown", (e) => {
 
 window.addEventListener("pointermove", (e) => {
   if (!dragging) return;
+  if (!Number.isFinite(e.screenX) || !Number.isFinite(e.screenY)) return;
   const dx = e.screenX - lastX;
   const dy = e.screenY - lastY;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
   lastX = e.screenX;
   lastY = e.screenY;
   window.tokenMeter?.dragBy(dx, dy);
@@ -213,6 +227,15 @@ bmlChain?.addEventListener("click", (e) => {
 document.getElementById("bmlRun")?.addEventListener("click", async () => {
   if (bmlBusy) return; bmlBusy = true;
   try { applyBml(await bmlApi()?.runSkillStep()); } finally { bmlBusy = false; }
+});
+document.getElementById("bmlConfirm")?.addEventListener("click", async () => {
+  if (bmlBusy) return;
+  bmlBusy = true;
+  try {
+    applyBml(await bmlApi()?.confirmInjectedStep({ continueChain: true }));
+  } finally {
+    bmlBusy = false;
+  }
 });
 bmlCancel?.addEventListener("click", async () => applyBml(await bmlApi()?.cancel()));
 document.getElementById("mDuration")?.addEventListener("change", async (e) => applyBml(await bmlApi()?.setMeasureFlags({ durationElapsed: e.target.checked })));

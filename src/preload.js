@@ -17,7 +17,10 @@ contextBridge.exposeInMainWorld("tokenMeter", {
     return ipcRenderer.invoke("usage:refresh");
   },
   dragBy(dx, dy) {
-    ipcRenderer.send("window:drag", { dx, dy });
+    const nx = Number(dx);
+    const ny = Number(dy);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+    ipcRenderer.send("window:drag", { dx: nx, dy: ny });
   },
   stepNeedle(state, targetAngle, dtSeconds) {
     return stepNeedle(state, targetAngle, dtSeconds);
@@ -41,6 +44,8 @@ contextBridge.exposeInMainWorld("tokenMeter", {
     advanceStage: (payload) => ipcRenderer.invoke("bml:advanceStage", payload || {}),
     runSkillStep: () => ipcRenderer.invoke("bml:runSkillStep"),
     runOneSkillStep: (index) => ipcRenderer.invoke("bml:runOneSkillStep", index),
+    confirmInjectedStep: (payload) =>
+      ipcRenderer.invoke("bml:confirmInjectedStep", payload || {}),
     cancel: () => ipcRenderer.invoke("bml:cancel"),
     nextSkillStep: () => ipcRenderer.invoke("bml:nextSkillStep"),
     skipOptionalStep: () => ipcRenderer.invoke("bml:skipOptionalStep"),

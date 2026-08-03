@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { getCursorUserDataDir } = require("../paths");
+const { resolveGlassSelectedSession } = require("./glass-session");
 
 /**
  * Decode a file URI from Cursor's workspace storage.
@@ -66,6 +67,33 @@ function latestActivityMs(root, opts = {}) {
 }
 
 /**
+ * Paths that are the Meter app itself — too hot from BML to mean "active task".
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {Set<string>}
+ */
+function meterSelfRoots(env = process.env) {
+  const roots = new Set();
+  const add = (p) => {
+    if (!p) return;
+    try {
+      roots.add(path.resolve(String(p)));
+    } catch {
+      // ignore
+    }
+  };
+  add(env.CUM_METER_ROOT);
+  add(env.CUM_APP_ROOT);
+  // Common install / checkout names
+  add(path.join(os.homedir(), "Cursor Usage Meter"));
+  try {
+    add(path.join(__dirname, "..", "..", ".."));
+  } catch {
+    // ignore
+  }
+  return roots;
+}
+
+/**
  * Find Cursor workspace folders ordered by recent activity (not just workspace.json mtime).
  * @param {{
  *   userDataDir?: string,
@@ -75,6 +103,7 @@ function latestActivityMs(root, opts = {}) {
  *   statSync?: typeof fs.statSync,
  *   readFileSync?: typeof fs.readFileSync,
  *   latestActivityMs?: typeof latestActivityMs,
+ *   excludeCwds?: Set<string>|string[],
  * }} [opts]
  */
 function listCursorWorkspaces(opts = {}) {
@@ -87,6 +116,15 @@ function listCursorWorkspaces(opts = {}) {
   const stat = opts.statSync || fs.statSync;
   const read = opts.readFileSync || fs.readFileSync;
   const activity = opts.latestActivityMs || latestActivityMs;
+  const exclude = new Set(
+    [...(opts.excludeCwds || meterSelfRoots(env))].map((p) => {
+      try {
+        return path.resolve(String(p));
+      } catch {
+        return String(p);
+      }
+    })
+  );
   try {
     return readdir(storage, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -97,6 +135,7 @@ function listCursorWorkspaces(opts = {}) {
           const raw = JSON.parse(String(read(file, "utf8")));
           const cwd = cwdFromFolderUri(raw.folder);
           if (!cwd) return null;
+          if (exclude.has(path.resolve(cwd))) return null;
           const fileMtime = stat(file).mtimeMs;
           const activeMs = Math.max(
             fileMtime,
@@ -115,12 +154,14 @@ function listCursorWorkspaces(opts = {}) {
 }
 
 /**
- * Resolve the Cursor project currently represented by its workspace storage.
- * Env overrides intentionally win for deterministic coaching.
+ * Resolve the Cursor project for the focused Agent / open task.
+ * Priority: env override → Glass selectedAgent → hottest non-Meter workspaceStorage.
  * @param {{
  *   env?: NodeJS.ProcessEnv,
  *   preferCwd?: string|null,
  *   listWorkspaces?: typeof listCursorWorkspaces,
+ *   resolveGlass?: typeof resolveGlassSelectedSession,
+ *   home?: string,
  * }} [opts]
  */
 function resolveChatSession(opts = {}) {
@@ -139,7 +180,33 @@ function resolveChatSession(opts = {}) {
       source: "env",
     };
   }
-  const workspace = (opts.listWorkspaces || listCursorWorkspaces)({ env })[0];
+
+  const resolveGlass = opts.resolveGlass || resolveGlassSelectedSession;
+  try {
+    const glass = resolveGlass({
+      env,
+      home: opts.home ?? os.homedir(),
+    });
+    if (glass?.cwd) {
+      return {
+        session_id: glass.session_id || glass.agentId || "glass-agent",
+        cwd: glass.cwd,
+        live: true,
+        source: glass.source || "glass_selected",
+        agentId: glass.agentId,
+        projectName: glass.projectName || null,
+        repoUrl: glass.repoUrl || null,
+        kind: glass.kind,
+      };
+    }
+  } catch {
+    // fall through to workspaceStorage
+  }
+
+  const workspace = (opts.listWorkspaces || listCursorWorkspaces)({
+    env,
+    home: opts.home,
+  })[0];
   if (!workspace) return null;
   return {
     session_id: workspace.storageId || "cursor-workspace",
@@ -153,5 +220,6 @@ module.exports = {
   cwdFromFolderUri,
   latestActivityMs,
   listCursorWorkspaces,
+  meterSelfRoots,
   resolveChatSession,
 };

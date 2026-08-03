@@ -46,17 +46,22 @@ _Avoid_: Autostart service, daemon, LaunchAgent (implementation detail)
 
 **BML coach**:
 The optional Meter panel that organizes Matt skills into a Build–Measure–Learn
-chain for the active Cursor workspace. It is independent of
-Grok-4.5-Usage-Meter.
+chain for the **focused Cursor Agent / open task** (Glass `selectedAgent`), not
+the Meter app itself. It is independent of Grok-4.5-Usage-Meter.
 
 **Cursor inject**:
-The coach saves each prompt in Cursor Usage Meter app data (or
-`CUM_COPY_FILE`), copies it to the macOS clipboard, activates Cursor, pastes
-into the Agent input with ⌘⇧V, and sends it (Return). Requires macOS
-Accessibility for the Meter / osascript. By default it waits for Agent
-activity to go idle, then auto-starts the next skill (`CUM_BML_AUTO_CONTINUE=0`
-restores a manual Continue gate). Optional `CUM_BML_SDK=1` uses the Cursor SDK
-instead when configured.
+The coach binds to Cursor's **focused Agent** (`cursor/glass.selectedAgent` in
+state.vscdb): local Agents use their file workspace; cloud Agents map to a
+local clone via `repoUrl` (e.g. FAF → `~/faf-pricelist-2.0`). Env
+`CUM_BML_CWD` still wins as an explicit override. Meter's own checkout is
+excluded from the old workspaceStorage mtime fallback so BML does not stick
+on Usage Meter while you work elsewhere.
+
+It saves each prompt, copies to the clipboard, activates Cursor, pastes into
+the Agent input with ⌘⇧V, and sends it. Requires Accessibility for the Meter /
+osascript. By default it waits for Agent idle, then auto-starts the next skill
+(`CUM_BML_AUTO_CONTINUE=0` restores manual Continue). Optional `CUM_BML_SDK=1`
+uses the Cursor SDK when configured.
 
 **Skill roots**:
 `CUM_SKILLS_ROOT`, `.cursor/skills`, `.agents/skills`, and `skills` in the

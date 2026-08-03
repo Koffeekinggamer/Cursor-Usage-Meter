@@ -387,8 +387,8 @@ function formatProjectContextForPrompt(project) {
   const lines = [
     "## Active chat project (source of Build + Measure nature)",
     project.boundToChat
-      ? "Bound to Cursor's active workspace — use THIS repo for the experiment."
-      : "WARNING: No active Cursor workspace found; falling back. Prefer opening Cursor in the target project.",
+      ? "Bound to Cursor's focused Agent / open task — use THIS repo for the experiment."
+      : "WARNING: No focused Cursor Agent found; falling back. Prefer focusing the target Agent in Cursor.",
     `Path: ${project.cwd}`,
     project.name ? `Name: ${project.name}` : null,
     project.description ? `Description: ${project.description}` : null,

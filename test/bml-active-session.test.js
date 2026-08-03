@@ -20,13 +20,31 @@ describe("Cursor workspace resolution", () => {
     const entries = [{ name: "old", isDirectory: () => true }, { name: "new", isDirectory: () => true }];
     const workspaces = listCursorWorkspaces({
       userDataDir: "/cursor",
-      readdirSync: () => entries,
-      statSync: (file) => ({ mtimeMs: file.includes("new") ? 20 : 10 }),
+      readdirSync: (dir, opts) => {
+        if (dir.endsWith("workspaceStorage")) return entries;
+        return [];
+      },
+      statSync: (file) => ({ mtimeMs: String(file).includes("new") ? 20 : 10 }),
       readFileSync: (file) => JSON.stringify({
-        folder: file.includes("new") ? "file:///new-project" : "file:///old-project",
+        folder: String(file).includes("new") ? "file:///new-project" : "file:///old-project",
       }),
+      latestActivityMs: (dir) => (String(dir).includes("new") ? 20 : 10),
     });
     assert.equal(workspaces[0].cwd, "/new-project");
+  });
+
+  it("ignores non-file workspace URIs", () => {
+    const workspaces = listCursorWorkspaces({
+      userDataDir: "/cursor",
+      readdirSync: () => [{ name: "remote", isDirectory: () => true }],
+      statSync: () => ({ mtimeMs: 1 }),
+      readFileSync: () =>
+        JSON.stringify({
+          folder: "vscode-remote://background-composer/workspace",
+        }),
+      latestActivityMs: () => 1,
+    });
+    assert.equal(workspaces.length, 0);
   });
 
   it("prefers CUM_BML_CWD over workspace discovery", () => {

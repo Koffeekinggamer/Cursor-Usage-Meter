@@ -18,6 +18,8 @@ const { createBmlCoach } = require("./lib/bml/coach");
 
 const POLL_MS = Number(process.env.CUM_POLL_MS) || 60_000;
 const OVERLAY_ASSERT_MS = Number(process.env.CUM_OVERLAY_MS) || 5_000;
+/** How often BML re-checks the active Cursor workspace (usage poll stays separate). */
+const BML_PROJECT_MS = Number(process.env.CUM_BML_PROJECT_MS) || 2_500;
 const ROOT = path.join(__dirname, "..");
 const pidFile = defaultPidPath(ROOT);
 const COLLAPSED = { width: 200, height: 200 };
@@ -31,6 +33,7 @@ if (!gotSingletonLock) {
 let mainWindow = null;
 let pollTimer = null;
 let overlayTimer = null;
+let bmlProjectTimer = null;
 /** @type {import('./lib/meter-state').MeterState} */
 let meterState = emptyMeterState();
 let bmlCoach = null;
@@ -173,12 +176,22 @@ function createWindow() {
 function registerBmlIpc() {
   ipcMain.handle("bml:getState", async () => bmlCoach?.getView() || null);
   ipcMain.handle("bml:setPanelOpen", async (_e, open) => {
-    const view = bmlCoach.setPanelOpen(Boolean(open));
-    applyPanelLayout(view.panelOpen); publishBml(view); return view;
+    const view = await bmlCoach.setPanelOpen(Boolean(open), {
+      autoProcess: true,
+      onProgress: publishBml,
+    });
+    applyPanelLayout(view.panelOpen);
+    publishBml(view);
+    return view;
   });
   ipcMain.handle("bml:togglePanel", async () => {
-    const view = bmlCoach.togglePanel();
-    applyPanelLayout(view.panelOpen); publishBml(view); return view;
+    const view = await bmlCoach.togglePanel({
+      autoProcess: true,
+      onProgress: publishBml,
+    });
+    applyPanelLayout(view.panelOpen);
+    publishBml(view);
+    return view;
   });
   for (const [channel, method] of [
     ["bml:setFields", "setFields"], ["bml:applyProjectToFields", "applyProjectToFields"],
@@ -240,6 +253,34 @@ function startOverlayAssert() {
   }, OVERLAY_ASSERT_MS);
 }
 
+/**
+ * Watch Cursor workspace switches for BML only.
+ * Does not touch usage/token polling — Meter keep counting as usual.
+ */
+function startBmlProjectWatch() {
+  if (bmlProjectTimer) clearInterval(bmlProjectTimer);
+  bmlProjectTimer = setInterval(async () => {
+    if (!bmlCoach || !mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      const before = bmlCoach.getView()?.boundCwd || null;
+      const { changed } = bmlCoach.syncActiveProject();
+      if (!changed) return;
+      const after = bmlCoach.getView();
+      publishBml(after);
+      // If BML panel is open, auto-process the new project instance.
+      if (after.panelOpen) {
+        const view = await bmlCoach.runAllSkillSteps({ onProgress: publishBml });
+        publishBml(view);
+      } else if (before && after.boundCwd && before !== after.boundCwd) {
+        // Panel closed: still rebind quietly so next activate uses the new app.
+        publishBml(bmlCoach.getView());
+      }
+    } catch {
+      // never interrupt the Meter overlay
+    }
+  }, BML_PROJECT_MS);
+}
+
 app.whenReady().then(() => {
   if (!gotSingletonLock) return;
 
@@ -252,11 +293,13 @@ app.whenReady().then(() => {
   }
 
   bmlCoach = createBmlCoach({ appData: app.getPath("userData") });
+  bmlCoach.syncActiveProject({ force: true });
   claimMeterSingleton(ROOT, process.pid);
   registerBmlIpc();
   createWindow();
   startPolling();
   startOverlayAssert();
+  startBmlProjectWatch();
 
   app.on("second-instance", () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -291,11 +334,13 @@ app.whenReady().then(() => {
 app.on("will-quit", () => {
   clearPidFile(pidFile);
   if (overlayTimer) clearInterval(overlayTimer);
+  if (bmlProjectTimer) clearInterval(bmlProjectTimer);
 });
 
 app.on("window-all-closed", () => {
   if (pollTimer) clearInterval(pollTimer);
   if (overlayTimer) clearInterval(overlayTimer);
+  if (bmlProjectTimer) clearInterval(bmlProjectTimer);
   if (process.platform !== "darwin") app.quit();
 });
 

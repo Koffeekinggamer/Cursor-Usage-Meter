@@ -24,15 +24,8 @@ body.bml-open { cursor: default; }
 #bmlBtn:hover, #bmlBtn.active { background: #2563eb; color: #fff; border-color: #1d4ed8; }
 #bmlPanel { position: absolute; top: 10px; left: 10px; right: 212px; bottom: 10px; z-index: 4; padding: 12px 14px; overflow: auto; border-radius: 14px; background: rgba(255,255,255,.97); border: 1px solid rgba(28,25,23,.12); box-shadow: 0 8px 24px rgba(0,0,0,.14); color: #1c1917; cursor: default; user-select: text; font-size: 11px; line-height: 1.35; text-align: left; -webkit-app-region: no-drag; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
 #bmlPanel[hidden], .bml-section[hidden] { display: none !important; }
-.bml-head { text-align: center; font-size: 13px; font-weight: 700; }
-.bml-section { display: flex; flex-direction: column; gap: 6px; }
-#bmlBuildSection { flex: 1 1 auto; min-height: 0; gap: 10px; }
-.chain { list-style: none; margin: 0; padding: 0 2px 0 0; counter-reset: bml-step; overflow-y: auto; flex: 1 1 auto; min-height: 160px; }
-.chain li { counter-increment: bml-step; margin-bottom: 1px; padding: 4px 6px 4px 1.75em; position: relative; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; border-radius: 6px; }
-.chain li::before { content: counter(bml-step) "."; position: absolute; left: 0; width: 1.5em; text-align: right; color: #a8a29e; }
-.chain li:hover, .chain li.active { background: rgba(37,99,235,.08); color: #1d4ed8; }
-.chain li.done { color: #a8a29e; text-decoration: line-through; opacity: .72; }
-.chain li[aria-disabled="true"] { cursor: wait; }
+.bml-head { display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 4px 6px; font-size: 13px; font-weight: 700; }
+.bml-project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; font-weight: 600; }
 .bml-cost { margin: 0; text-align: center; color: #57534e; font-size: 11px; }
 .bml-cost.running { color: #1d4ed8; }
 .bml-status { margin: 4px 8px 0; text-align: center; color: #78716c; font-size: 10px; line-height: 1.3; }

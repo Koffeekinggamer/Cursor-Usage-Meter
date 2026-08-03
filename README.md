@@ -50,9 +50,9 @@ npm run uninstall-autolaunch
 ## BML skills coach
 
 The optional **BML** button opens a Build–Measure–Learn coach powered by the
-Matt skills pack. It resolves skills from `CUM_SKILLS_ROOT`, project-local
-`.cursor/skills`, `.agents/skills`, or `skills` directories, then compatible
-Matt-pack fallbacks.
+Matt skills pack. Opening BML (or switching the active Cursor workspace while
+BML is open) rebinds to that project’s app profile and copies the next skill
+prompt — while the dial keeps polling Cursor usage on its own schedule.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on

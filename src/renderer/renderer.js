@@ -84,6 +84,16 @@ function applyBml(view) {
     });
   }
   if (bmlCost) bmlCost.textContent = view.costEstimate || "Est. —";
+  const bmlProject = document.getElementById("bmlProject");
+  if (bmlProject) {
+    const label =
+      view.project?.appProfile?.label ||
+      view.project?.name ||
+      view.boundCwd ||
+      "";
+    bmlProject.textContent = label ? `· ${label}` : "";
+    bmlProject.title = view.project?.cwd || view.boundCwd || "";
+  }
   const measure = view.measure || {};
   document.getElementById("mDuration").checked = Boolean(measure.durationElapsed);
   document.getElementById("mKill").checked = Boolean(measure.killHit);

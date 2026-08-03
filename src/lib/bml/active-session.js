@@ -13,14 +13,60 @@ const { getCursorUserDataDir } = require("../paths");
 function cwdFromFolderUri(uri) {
   if (typeof uri !== "string" || !uri.startsWith("file://")) return null;
   try {
-    return decodeURIComponent(new URL(uri).pathname);
+    let pathname = decodeURIComponent(new URL(uri).pathname);
+    // Windows file URIs arrive as /C:/...
+    if (/^\/[A-Za-z]:\//.test(pathname)) pathname = pathname.slice(1);
+    return pathname;
   } catch {
     return null;
   }
 }
 
 /**
- * Find the newest Cursor workspace folder.
+ * Newest mtime under a directory (shallow+nested, capped).
+ * @param {string} root
+ * @param {{
+ *   readdirSync?: typeof fs.readdirSync,
+ *   statSync?: typeof fs.statSync,
+ *   maxEntries?: number,
+ * }} [opts]
+ */
+function latestActivityMs(root, opts = {}) {
+  const readdir = opts.readdirSync || fs.readdirSync;
+  const stat = opts.statSync || fs.statSync;
+  const maxEntries = opts.maxEntries ?? 80;
+  let latest = 0;
+  let seen = 0;
+  /** @type {string[]} */
+  const queue = [root];
+  while (queue.length && seen < maxEntries) {
+    const dir = queue.shift();
+    let entries;
+    try {
+      entries = readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (seen >= maxEntries) break;
+      const full = path.join(dir, entry.name);
+      seen += 1;
+      try {
+        const st = stat(full);
+        if (st.mtimeMs > latest) latest = st.mtimeMs;
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          queue.push(full);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return latest;
+}
+
+/**
+ * Find Cursor workspace folders ordered by recent activity (not just workspace.json mtime).
  * @param {{
  *   userDataDir?: string,
  *   env?: NodeJS.ProcessEnv,
@@ -28,6 +74,7 @@ function cwdFromFolderUri(uri) {
  *   readdirSync?: typeof fs.readdirSync,
  *   statSync?: typeof fs.statSync,
  *   readFileSync?: typeof fs.readFileSync,
+ *   latestActivityMs?: typeof latestActivityMs,
  * }} [opts]
  */
 function listCursorWorkspaces(opts = {}) {
@@ -39,15 +86,23 @@ function listCursorWorkspaces(opts = {}) {
   const readdir = opts.readdirSync || fs.readdirSync;
   const stat = opts.statSync || fs.statSync;
   const read = opts.readFileSync || fs.readFileSync;
+  const activity = opts.latestActivityMs || latestActivityMs;
   try {
     return readdir(storage, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => {
-        const file = path.join(storage, entry.name, "workspace.json");
+        const dir = path.join(storage, entry.name);
+        const file = path.join(dir, "workspace.json");
         try {
           const raw = JSON.parse(String(read(file, "utf8")));
           const cwd = cwdFromFolderUri(raw.folder);
-          return cwd ? { cwd, mtimeMs: stat(file).mtimeMs } : null;
+          if (!cwd) return null;
+          const fileMtime = stat(file).mtimeMs;
+          const activeMs = Math.max(
+            fileMtime,
+            activity(dir, { readdirSync: readdir, statSync: stat })
+          );
+          return { cwd, mtimeMs: activeMs, storageId: entry.name };
         } catch {
           return null;
         }
@@ -79,7 +134,7 @@ function resolveChatSession(opts = {}) {
   if (cwd) {
     return {
       session_id: "cursor-workspace",
-      cwd,
+      cwd: path.resolve(cwd),
       live: true,
       source: "env",
     };
@@ -87,7 +142,7 @@ function resolveChatSession(opts = {}) {
   const workspace = (opts.listWorkspaces || listCursorWorkspaces)({ env })[0];
   if (!workspace) return null;
   return {
-    session_id: "cursor-workspace",
+    session_id: workspace.storageId || "cursor-workspace",
     cwd: workspace.cwd,
     live: true,
     source: "cursor_workspace",
@@ -96,6 +151,7 @@ function resolveChatSession(opts = {}) {
 
 module.exports = {
   cwdFromFolderUri,
+  latestActivityMs,
   listCursorWorkspaces,
   resolveChatSession,
 };

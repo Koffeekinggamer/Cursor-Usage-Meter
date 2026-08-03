@@ -30,7 +30,10 @@
         <div id="bmlBar"><button type="button" id="bmlBtn" title="BML Process (active Cursor workspace = experiment)" aria-expanded="false" aria-controls="bmlPanel">BML</button></div>
       </div>
       <div id="bmlPanel" hidden>
-        <header class="bml-head"><strong>BML Process</strong></header>
+        <header class="bml-head">
+          <strong>BML Process</strong>
+          <span id="bmlProject" class="bml-project muted small"></span>
+        </header>
         <section class="bml-section" id="bmlBuildSection">
           <ol id="bmlChain" class="chain" aria-label="BML skill chain — click a line to run only that skill"></ol>
           <p id="bmlCost" class="bml-cost">Est. —</p>

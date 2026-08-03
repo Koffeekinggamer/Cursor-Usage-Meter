@@ -4,6 +4,7 @@
  * Main-process BML coach: state persistence + github + inject orchestration.
  */
 
+const path = require("path");
 const {
   emptyBmlState,
   defaultStatePath,
@@ -59,6 +60,8 @@ function createBmlCoach(opts = {}) {
   const inject = opts.inject || injectIntoCursor;
   /** Cooperative cancel for chain + single-skill runs (and kills active inject). */
   let cancelRequested = false;
+  /** Last Cursor workspace cwd BML is bound to (null until first sync). */
+  let boundCwd = null;
 
   function persist() {
     try {
@@ -66,6 +69,62 @@ function createBmlCoach(opts = {}) {
     } catch {
       // best effort
     }
+  }
+
+  function normalizeCwd(cwd) {
+    if (!cwd) return null;
+    try {
+      return path.resolve(String(cwd));
+    } catch {
+      return String(cwd);
+    }
+  }
+
+  /**
+   * Rebind BML to the Cursor workspace currently open.
+   * Usage/token polling is independent — this only updates coach state.
+   * @param {{ force?: boolean }} [opts]
+   * @returns {{ changed: boolean, project: import('./project-context').ProjectContext|null }}
+   */
+  function syncActiveProject(opts = {}) {
+    const force = Boolean(opts.force);
+    let project = null;
+    try {
+      project = activeProject();
+    } catch {
+      project = null;
+    }
+    const cwd = normalizeCwd(project?.cwd);
+    const changed = Boolean(cwd && cwd !== boundCwd);
+
+    if (changed || (force && cwd && !boundCwd)) {
+      if (changed && boundCwd) {
+        cancelRequested = true;
+        try {
+          abortActiveInject();
+        } catch {
+          // ignore
+        }
+        cancelRequested = false;
+        state = reduceBmlState(state, { type: "run/reset" });
+        state = reduceBmlState(state, { type: "build/step", index: 0 });
+        state = {
+          ...state,
+          activeIssue: null,
+          fields: { ...EMPTY_FIELDS },
+          stage: "Build",
+          tinyBuild: false,
+        };
+        persist();
+      }
+      boundCwd = cwd;
+    }
+
+    if (cwd) {
+      ensureExperimentFromChatProject();
+    }
+
+    return { changed: changed || Boolean(force && cwd), project };
   }
 
   function dispatch(action) {
@@ -228,8 +287,16 @@ function createBmlCoach(opts = {}) {
             technicalHints: project.technicalHints,
             hasContextMd: Boolean(project.contextExcerpt),
             scripts: project.scripts,
+            appProfile: project.appProfile
+              ? {
+                  id: project.appProfile.id,
+                  label: project.appProfile.label,
+                  host: project.appProfile.host,
+                }
+              : null,
           }
         : null,
+      boundCwd,
     };
   }
 
@@ -261,13 +328,43 @@ function createBmlCoach(opts = {}) {
     getView,
     getState: () => state,
     cancelRun,
+    syncActiveProject,
 
-    setPanelOpen(open) {
-      return dispatch({ type: open ? "panel/open" : "panel/close" });
+    /**
+     * Open/close BML. Opening rebinds to the active Cursor project and starts
+     * processing that instance (copy next skill) without touching usage polling.
+     * @param {boolean} open
+     * @param {{
+     *   autoProcess?: boolean,
+     *   onProgress?: (view: object) => void,
+     * }} [opts]
+     */
+    async setPanelOpen(open, opts = {}) {
+      dispatch({ type: open ? "panel/open" : "panel/close" });
+      if (!open) return getView();
+
+      const prevCwd = boundCwd;
+      const { changed } = syncActiveProject({ force: true });
+      const onProgress =
+        typeof opts.onProgress === "function" ? opts.onProgress : null;
+      const autoProcess = opts.autoProcess !== false;
+
+      if (!autoProcess) return getView();
+
+      // Keep an in-flight paste confirmation for the same project.
+      if (!changed && state.lastInject?.needsConfirm && prevCwd === boundCwd) {
+        return getView();
+      }
+
+      if (onProgress) onProgress(getView());
+      return this.runAllSkillSteps({ onProgress });
     },
 
-    togglePanel() {
-      return dispatch({ type: "panel/toggle" });
+    async togglePanel(opts = {}) {
+      if (state.panelOpen) {
+        return this.setPanelOpen(false, opts);
+      }
+      return this.setPanelOpen(true, opts);
     },
 
     setFields(fields) {

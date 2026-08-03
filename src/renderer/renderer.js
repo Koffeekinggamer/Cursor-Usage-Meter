@@ -55,8 +55,16 @@ function shortenBmlStatus(text) {
     .replace(/\(backup:\s*[^)]+\)/gi, "(saved)")
     .replace(/Cursor activated\.?/gi, "")
     .replace(
-      /Paste into Agent \(Auto\), wait for the skill to finish, then click Continue\.?/gi,
-      ""
+      /Paste into Cursor Agent \(⌘V\),?\s*(let Auto finish(?: the skill)?,?\s*)?then click Continue\.?/gi,
+      "Paste into Agent (⌘V), then Continue."
+    )
+    .replace(
+      /Paste into Agent \(Auto\),?\s*(wait(?: for the skill to finish)?,?\s*)?then click Continue\.?/gi,
+      "Paste into Agent, then Continue."
+    )
+    .replace(
+      /Pause:\s*paste into (?:Cursor )?Agent \(Auto\),?\s*(wait until that skill finishes,?\s*)?then(?: click)? Continue/gi,
+      "Pause: paste into Agent, then Continue"
     )
     .replace(/\s+/g, " ")
     .trim();

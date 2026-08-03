@@ -933,7 +933,7 @@ function createBmlCoach(opts = {}) {
             command: step?.command,
             detail:
               (state.lastInject.detail || "Prompt copied.") +
-              ` Pause: paste into Cursor Agent (Auto), wait until that skill finishes, then click Continue (${i + 1}/${SKILL_CHAIN.length}).`,
+              ` Pause: paste into Agent (Auto), then Continue (${i + 1}/${SKILL_CHAIN.length}).`,
           });
           dispatch({
             type: "run/cost",

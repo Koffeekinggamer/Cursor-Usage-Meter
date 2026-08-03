@@ -50,6 +50,18 @@ let lastTs = performance.now();
 /** @type {CanvasRenderingContext2D|null} */
 let ctx = null;
 
+function shortenBmlStatus(text) {
+  return String(text || "")
+    .replace(/\(backup:\s*[^)]+\)/gi, "(saved)")
+    .replace(/Cursor activated\.?/gi, "")
+    .replace(
+      /Paste into Agent \(Auto\), wait for the skill to finish, then click Continue\.?/gi,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function applyBml(view) {
   if (!view) return;
   bml = view;
@@ -65,9 +77,12 @@ function applyBml(view) {
   if (bmlConfirm) bmlConfirm.hidden = !awaiting;
   if (bmlRun) bmlRun.hidden = awaiting;
   if (bmlStatus) {
-    const text = view.injectStatus || view.lastInject?.detail || "";
+    const text = shortenBmlStatus(
+      view.injectStatus || view.lastInject?.detail || ""
+    );
     bmlStatus.hidden = !text;
     bmlStatus.textContent = text;
+    bmlStatus.title = view.injectStatus || view.lastInject?.detail || "";
   }
   if (bmlChain) {
     bmlChain.innerHTML = "";
@@ -83,7 +98,13 @@ function applyBml(view) {
       bmlChain.appendChild(li);
     });
   }
-  if (bmlCost) bmlCost.textContent = view.costEstimate || "Est. —";
+  if (bmlCost) {
+    const cost = String(view.costEstimate || "Est. —")
+      .replace(/\s+/g, " ")
+      .trim();
+    bmlCost.textContent = cost;
+    bmlCost.title = cost;
+  }
   const bmlProject = document.getElementById("bmlProject");
   if (bmlProject) {
     const label =
@@ -91,7 +112,7 @@ function applyBml(view) {
       view.project?.name ||
       view.boundCwd ||
       "";
-    bmlProject.textContent = label ? `· ${label}` : "";
+    bmlProject.textContent = label;
     bmlProject.title = view.project?.cwd || view.boundCwd || "";
   }
   const measure = view.measure || {};

@@ -23,7 +23,8 @@ const BML_PROJECT_MS = Number(process.env.CUM_BML_PROJECT_MS) || 2_500;
 const ROOT = path.join(__dirname, "..");
 const pidFile = defaultPidPath(ROOT);
 const COLLAPSED = { width: 200, height: 200 };
-const EXPANDED = { width: 400, height: 480 };
+/** Dial (200) + BML panel (~320) + padding */
+const EXPANDED = { width: 560, height: 560 };
 
 const gotSingletonLock = app.requestSingleInstanceLock();
 if (!gotSingletonLock) {

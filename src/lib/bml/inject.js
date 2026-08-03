@@ -154,7 +154,7 @@ async function copyPromptToClipboard(prompt, opts = {}) {
         ok: true,
         method: "clipboard",
         needsConfirm: true,
-        detail: `Copied to clipboard (backup: ${copyPath}). Paste into Cursor Agent (⌘V), let Auto finish the skill, then click Continue.`,
+        detail: `Copied (saved). Paste into Cursor Agent (⌘V), then click Continue.`,
       };
     }
   }
@@ -163,7 +163,7 @@ async function copyPromptToClipboard(prompt, opts = {}) {
     ok: true,
     method: "clipboard",
     needsConfirm: true,
-    detail: `Prompt saved to ${copyPath}. Paste into Cursor Agent (⌘V), let Auto finish, then click Continue.`,
+    detail: `Prompt saved. Paste into Cursor Agent (⌘V), then click Continue.`,
   };
 }
 
@@ -229,9 +229,9 @@ async function injectIntoCursor(prompt, opts = {}) {
     method: "clipboard",
     needsConfirm: true,
     detail:
-      (clip.detail || "Copied to clipboard.") +
+      (clip.detail || "Copied.") +
       (activate.code === 0 ? " Cursor activated." : "") +
-      " Paste into Agent (Auto), wait for the skill to finish, then click Continue.",
+      " Paste into Agent (Auto), then click Continue.",
   };
 }
 

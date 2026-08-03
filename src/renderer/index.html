@@ -27,41 +27,96 @@
           </div>
           <div id="plan"></div>
         </div>
-        <div id="bmlBar"><button type="button" id="bmlBtn" title="BML Process (active Cursor workspace = experiment)" aria-expanded="false" aria-controls="bmlPanel">BML</button></div>
+        <div id="bmlBar">
+          <button
+            type="button"
+            id="bmlBtn"
+            title="BML Process (active Cursor workspace = experiment)"
+            aria-expanded="false"
+            aria-controls="bmlPanel"
+          >
+            BML
+          </button>
+        </div>
       </div>
+
       <div id="bmlPanel" hidden>
         <header class="bml-head">
           <strong>BML Process</strong>
-          <span id="bmlProject" class="bml-project muted small"></span>
+          <span id="bmlProject" class="bml-project"></span>
         </header>
+
         <section class="bml-section" id="bmlBuildSection">
-          <ol id="bmlChain" class="chain" aria-label="BML skill chain — click a line to run only that skill"></ol>
-          <p id="bmlCost" class="bml-cost">Est. —</p>
-          <p id="bmlStatus" class="bml-status muted small" hidden></p>
-          <div class="btn-row">
-            <button type="button" id="bmlRun" class="btn primary" title="Copy the first/next skill prompt — paste into Cursor Agent (Auto)">
-              Copy next
-            </button>
-            <button type="button" id="bmlConfirm" class="btn primary" hidden title="Mark this skill done after Agent finishes, then copy the next">
-              Continue
-            </button>
-            <button type="button" id="bmlCancel" class="btn danger" hidden>Cancel</button>
+          <ol
+            id="bmlChain"
+            class="chain"
+            aria-label="BML skill chain — click a line to run only that skill"
+          ></ol>
+          <div class="bml-footer">
+            <p id="bmlCost" class="bml-cost">Est. —</p>
+            <p id="bmlStatus" class="bml-status" hidden></p>
+            <div class="btn-row">
+              <button
+                type="button"
+                id="bmlRun"
+                class="btn primary"
+                title="Copy the first/next skill prompt — paste into Cursor Agent (Auto)"
+              >
+                Copy next
+              </button>
+              <button
+                type="button"
+                id="bmlConfirm"
+                class="btn primary"
+                hidden
+                title="Mark this skill done after Agent finishes, then copy the next"
+              >
+                Continue
+              </button>
+              <button type="button" id="bmlCancel" class="btn danger" hidden>
+                Cancel
+              </button>
+            </div>
           </div>
         </section>
-        <section class="bml-section" id="bmlMeasureSection">
+
+        <section class="bml-section" id="bmlMeasureSection" hidden>
           <div class="row"><strong class="small">Measure</strong></div>
           <input id="mValue" type="text" placeholder="This week value (e.g. 55%)" />
           <textarea id="mText" rows="2" placeholder="Weekly numbers / notes"></textarea>
-          <div class="btn-row"><button type="button" id="bmlPostMeasure" class="btn primary">Post to issue</button></div>
-          <label class="check"><input type="checkbox" id="mDuration" />Duration elapsed</label>
-          <label class="check"><input type="checkbox" id="mKill" />Kill threshold hit</label>
+          <div class="btn-row">
+            <button type="button" id="bmlPostMeasure" class="btn primary">
+              Post to issue
+            </button>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="mDuration" />Duration elapsed
+          </label>
+          <label class="check">
+            <input type="checkbox" id="mKill" />Kill threshold hit
+          </label>
           <ul id="mNotes" class="notes muted small"></ul>
         </section>
-        <section class="bml-section" id="bmlLearnSection">
+
+        <section class="bml-section" id="bmlLearnSection" hidden>
           <div class="row"><strong class="small">Learn (light)</strong></div>
-          <div class="btn-row"><button type="button" class="btn ghost" data-learn="persevere">Persevere</button><button type="button" class="btn ghost" data-learn="pivot">Pivot</button><button type="button" class="btn ghost" data-learn="kill-candidate">Kill</button></div>
-          <textarea id="learnEvidence" rows="2" placeholder="Decision + evidence"></textarea>
-        </div>
+          <div class="btn-row">
+            <button type="button" class="btn ghost" data-learn="persevere">
+              Persevere
+            </button>
+            <button type="button" class="btn ghost" data-learn="pivot">
+              Pivot
+            </button>
+            <button type="button" class="btn ghost" data-learn="kill-candidate">
+              Kill
+            </button>
+          </div>
+          <textarea
+            id="learnEvidence"
+            rows="2"
+            placeholder="Decision + evidence"
+          ></textarea>
+        </section>
       </div>
     </div>
     <script src="paint.js"></script>

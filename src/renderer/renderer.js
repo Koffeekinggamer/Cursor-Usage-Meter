@@ -120,13 +120,8 @@ function applyBml(view) {
   }
   const bmlProject = document.getElementById("bmlProject");
   if (bmlProject) {
-    const label =
-      view.project?.appProfile?.label ||
-      view.project?.name ||
-      view.boundCwd ||
-      "";
-    bmlProject.textContent = label;
-    bmlProject.title = view.project?.cwd || view.boundCwd || "";
+    bmlProject.hidden = true;
+    bmlProject.textContent = "";
   }
   const measure = view.measure || {};
   document.getElementById("mDuration").checked = Boolean(measure.durationElapsed);

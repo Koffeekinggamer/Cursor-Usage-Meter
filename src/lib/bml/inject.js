@@ -11,6 +11,7 @@ const { getMeterDataDir } = require("../paths");
  *   method: 'clipboard'|'sdk-auto'|'unavailable',
  *   detail?: string,
  *   stdout?: string,
+ *   needsConfirm?: boolean,
  * }} InjectResult
  */
 
@@ -109,7 +110,7 @@ function runCommand(bin, args, opts = {}) {
  * @param {{
  *   env?: NodeJS.ProcessEnv,
  *   writeFileSync?: typeof fs.writeFileSync,
- *   runCommand?: typeof runCommand,
+ *   spawnImpl?: typeof spawn,
  * }} [opts]
  * @returns {Promise<InjectResult>}
  */
@@ -154,7 +155,7 @@ async function copyPromptToClipboard(prompt, opts = {}) {
         ok: true,
         method: "clipboard",
         needsConfirm: true,
-        detail: `Copied (saved). Paste into Cursor Agent (⌘V), then click Continue.`,
+        detail: "Copied.",
       };
     }
   }
@@ -163,12 +164,64 @@ async function copyPromptToClipboard(prompt, opts = {}) {
     ok: true,
     method: "clipboard",
     needsConfirm: true,
-    detail: `Prompt saved. Paste into Cursor Agent (⌘V), then click Continue.`,
+    detail: "Prompt saved.",
   };
 }
 
 /**
- * Inject a BML skill prompt into Cursor (clipboard cascade).
+ * Whether auto-paste into Cursor Agent is enabled (default on for macOS).
+ * @param {NodeJS.ProcessEnv} env
+ */
+function wantAutoPaste(env) {
+  const v = env.CUM_BML_PASTE;
+  if (v === "0" || v === "false") return false;
+  if (v === "1" || v === "true") return true;
+  return true;
+}
+
+/**
+ * Whether to press Return after paste (default on).
+ * @param {NodeJS.ProcessEnv} env
+ */
+function wantAutoSend(env) {
+  const v = env.CUM_BML_SEND;
+  if (v === "0" || v === "false") return false;
+  if (v === "1" || v === "true") return true;
+  return true;
+}
+
+/**
+ * AppleScript: activate Cursor, focus Agent sidepanel, paste into input, optionally send.
+ * Cursor maps ⌘⇧V to "Add clipboard to input box" (plain ⌘V only adds context).
+ * Requires Accessibility permission for Cursor Usage Meter / osascript.
+ * @param {{ send?: boolean }} [opts]
+ * @returns {string}
+ */
+function buildPasteIntoAgentScript(opts = {}) {
+  const send = opts.send !== false;
+  const sendLines = send
+    ? `
+    delay 0.2
+    key code 36`
+    : "";
+  return `
+tell application "Cursor" to activate
+delay 0.5
+tell application "System Events"
+  tell process "Cursor"
+    set frontmost to true
+    -- Focus Agent / sidepanel input (Cmd+I)
+    keystroke "i" using {command down}
+    delay 0.45
+    -- Paste clipboard into the chat/agent input (Cmd+Shift+V)
+    keystroke "v" using {command down, shift down}${sendLines}
+  end tell
+end tell
+`.trim();
+}
+
+/**
+ * Inject a BML skill prompt into Cursor (clipboard + auto-paste into Agent).
  * @param {string} prompt
  * @param {{
  *   preferCwd?: string|null,
@@ -176,6 +229,7 @@ async function copyPromptToClipboard(prompt, opts = {}) {
  *   runCommand?: typeof runCommand,
  *   copyPrompt?: typeof copyPromptToClipboard,
  *   spawnImpl?: typeof spawn,
+ *   Agent?: unknown,
  * }} [opts]
  * @returns {Promise<InjectResult>}
  */
@@ -201,7 +255,7 @@ async function injectIntoCursor(prompt, opts = {}) {
     }
   }
 
-  // 2) Clipboard + activate Cursor Agent for paste on Auto
+  // 2) Clipboard + activate Cursor Agent + paste/send
   const clip = await copy(prompt, {
     env,
     spawnImpl: opts.spawnImpl,
@@ -212,26 +266,63 @@ async function injectIntoCursor(prompt, opts = {}) {
       needsConfirm: Boolean(clip.ok),
       detail:
         (clip.detail || "Clipboard inject.") +
-        " Paste into Cursor Agent with model Auto, then click Continue.",
+        " Paste into Cursor Agent (⌘⇧V), then click Continue.",
     };
   }
 
-  const activate = await run(
-    "osascript",
-    ["-e", 'tell application "Cursor" to activate'],
-    { env, spawnImpl: opts.spawnImpl, timeoutMs: 5_000 }
-  );
-  if (activate.aborted) {
+  const doPaste = wantAutoPaste(env);
+  const doSend = wantAutoSend(env);
+
+  if (!doPaste) {
+    const activate = await run(
+      "osascript",
+      ["-e", 'tell application "Cursor" to activate'],
+      { env, spawnImpl: opts.spawnImpl, timeoutMs: 5_000 }
+    );
+    if (activate.aborted) {
+      return { ok: false, method: "clipboard", detail: "Cancelled during inject" };
+    }
+    return {
+      ...clip,
+      method: "clipboard",
+      needsConfirm: true,
+      detail:
+        (clip.detail || "Copied.") +
+        (activate.code === 0 ? " Cursor activated." : "") +
+        " Paste into Agent (⌘⇧V), then click Continue.",
+    };
+  }
+
+  const script = buildPasteIntoAgentScript({ send: doSend });
+  const paste = await run("osascript", ["-e", script], {
+    env,
+    spawnImpl: opts.spawnImpl,
+    timeoutMs: 15_000,
+  });
+  if (paste.aborted) {
     return { ok: false, method: "clipboard", detail: "Cancelled during inject" };
   }
+
+  if (paste.code !== 0) {
+    return {
+      ...clip,
+      method: "clipboard",
+      needsConfirm: true,
+      detail:
+        (clip.detail || "Copied.") +
+        " Auto-paste failed (grant Accessibility to Cursor Usage Meter / osascript)." +
+        " Paste into Agent (⌘⇧V), then click Continue." +
+        (paste.stderr ? ` ${String(paste.stderr).slice(0, 120)}` : ""),
+    };
+  }
+
   return {
     ...clip,
     method: "clipboard",
     needsConfirm: true,
-    detail:
-      (clip.detail || "Copied.") +
-      (activate.code === 0 ? " Cursor activated." : "") +
-      " Paste into Agent (Auto), then click Continue.",
+    detail: doSend
+      ? "Pasted into Agent and sent. When the skill finishes, click Continue."
+      : "Pasted into Agent. Send if needed, then click Continue when done.",
   };
 }
 
@@ -239,6 +330,7 @@ module.exports = {
   runCommand,
   copyPromptToClipboard,
   injectIntoCursor,
+  buildPasteIntoAgentScript,
   /** @deprecated Use injectIntoCursor. */
   injectIntoGrok: injectIntoCursor,
   abortActiveInject,

@@ -52,7 +52,7 @@ function defaultBounds(size = COLLAPSED) {
   };
 }
 
-function applyPanelLayout(panelOpen) {
+function applyPanelLayout(panelOpen, opts = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const size = panelOpen ? EXPANDED : COLLAPSED;
   const [x, y] = mainWindow.getPosition();
@@ -63,12 +63,14 @@ function applyPanelLayout(panelOpen) {
     width: size.width,
     height: size.height,
   });
+  // Do not steal focus after inject — Cursor Agent needs to keep the keyboard.
+  const wantFocus = panelOpen && opts.focus === true;
   try {
     mainWindow.setFocusable(true);
-    if (panelOpen) {
+    if (wantFocus) {
       mainWindow.focus();
       mainWindow.webContents.focus();
-    } else {
+    } else if (!panelOpen) {
       setTimeout(() => {
         if (!mainWindow || mainWindow.isDestroyed() || bmlCoach?.getState()?.panelOpen) return;
         try { mainWindow.setFocusable(false); } catch {}
@@ -177,20 +179,23 @@ function createWindow() {
 function registerBmlIpc() {
   ipcMain.handle("bml:getState", async () => bmlCoach?.getView() || null);
   ipcMain.handle("bml:setPanelOpen", async (_e, open) => {
+    if (open) applyPanelLayout(true, { focus: false });
     const view = await bmlCoach.setPanelOpen(Boolean(open), {
       autoProcess: true,
       onProgress: publishBml,
     });
-    applyPanelLayout(view.panelOpen);
+    applyPanelLayout(view.panelOpen, { focus: false });
     publishBml(view);
     return view;
   });
   ipcMain.handle("bml:togglePanel", async () => {
+    const opening = !bmlCoach?.getState()?.panelOpen;
+    if (opening) applyPanelLayout(true, { focus: false });
     const view = await bmlCoach.togglePanel({
       autoProcess: true,
       onProgress: publishBml,
     });
-    applyPanelLayout(view.panelOpen);
+    applyPanelLayout(view.panelOpen, { focus: false });
     publishBml(view);
     return view;
   });

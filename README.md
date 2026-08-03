@@ -56,13 +56,15 @@ prompt — while the dial keeps polling Cursor usage on its own schedule.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
-macOS, and best-effort activates Cursor. **Clipboard is not the Agent** — the
-checklist pauses after each copy. Paste into Cursor Agent with model **Auto**,
-wait for that skill to finish, then click **Continue**. Only then is the step
-marked done and the next prompt copied.
+macOS, then auto-pastes into Cursor Agent (`⌘⇧V`) and sends it. Grant
+**Accessibility** to Cursor Usage Meter (or Terminal/osascript) if paste fails.
+The checklist still pauses after each send — when Auto finishes that skill,
+click **Continue** for the next one.
 
 ```bash
 npm run bml-run-auto          # /ask-matt router for the active workspace
+CUM_BML_PASTE=0               # clipboard + activate only (manual ⌘⇧V)
+CUM_BML_SEND=0                # paste but do not press Return
 CUM_BML_SDK=1 npm run bml-run-auto   # optional: Cursor SDK model Auto when configured
 npm run bml-live             # inspect persisted BML state / prompts
 ```

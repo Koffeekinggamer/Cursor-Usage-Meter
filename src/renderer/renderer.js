@@ -108,10 +108,11 @@ function applyBml(view) {
   }
   if (bmlCost) {
     const cost = String(view.costEstimate || "Est. —")
-      .replace(/\s+/g, " ")
+      .replace(/\s*·\s*Est\.\s*/i, "\nEst. ")
+      .replace(/[^\S\n]+/g, " ")
       .trim();
     bmlCost.textContent = cost;
-    bmlCost.title = cost;
+    bmlCost.title = cost.replace(/\n/g, " · ");
   }
   const bmlProject = document.getElementById("bmlProject");
   if (bmlProject) {

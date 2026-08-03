@@ -1,6 +1,6 @@
 "use strict";
 
-const { describe, it } = require("node:test");
+const { describe, it, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
 const os = require("os");
@@ -8,6 +8,20 @@ const fs = require("fs");
 const { createBmlCoach } = require("../src/lib/bml/coach");
 
 describe("BML project switch", () => {
+  let prevAuto;
+  let prevCwd;
+  beforeEach(() => {
+    prevAuto = process.env.CUM_BML_AUTO_CONTINUE;
+    prevCwd = process.env.CUM_BML_CWD;
+    process.env.CUM_BML_AUTO_CONTINUE = "0";
+  });
+  afterEach(() => {
+    if (prevAuto === undefined) delete process.env.CUM_BML_AUTO_CONTINUE;
+    else process.env.CUM_BML_AUTO_CONTINUE = prevAuto;
+    if (prevCwd === undefined) delete process.env.CUM_BML_CWD;
+    else process.env.CUM_BML_CWD = prevCwd;
+  });
+
   it("rebinds and auto-processes when the panel opens", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
     const statePath = path.join(dir, "bml-state.json");
@@ -46,7 +60,6 @@ describe("BML project switch", () => {
         };
       },
     });
-    // Monkeypatch active project via env
     process.env.CUM_BML_CWD = projA;
     const opened = await coach.setPanelOpen(true, { autoProcess: true });
     assert.equal(opened.panelOpen, true);
@@ -66,7 +79,6 @@ describe("BML project switch", () => {
     assert.ok(injects >= 2, "new project starts its own copy");
     assert.match(reopened.project?.appProfile?.id || "", /grok/);
 
-    delete process.env.CUM_BML_CWD;
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

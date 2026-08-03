@@ -58,13 +58,18 @@ Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
 macOS, then auto-pastes into Cursor Agent (`⌘⇧V`) and sends it. Grant
 **Accessibility** to Cursor Usage Meter (or Terminal/osascript) if paste fails.
-The checklist still pauses after each send — when Auto finishes that skill,
-click **Continue** for the next one.
+
+After each send, BML waits for Agent activity to go idle, marks the skill done,
+and automatically starts the next one. Use **Next now** to skip the wait, or
+**Cancel** to stop the chain. Set `CUM_BML_AUTO_CONTINUE=0` for the old
+manual Continue gate.
 
 ```bash
 npm run bml-run-auto          # /ask-matt router for the active workspace
 CUM_BML_PASTE=0               # clipboard + activate only (manual ⌘⇧V)
 CUM_BML_SEND=0                # paste but do not press Return
+CUM_BML_AUTO_CONTINUE=0       # pause for Continue instead of auto-next
+CUM_BML_IDLE_MS=12000         # quiet time before treating Agent as done
 CUM_BML_SDK=1 npm run bml-run-auto   # optional: Cursor SDK model Auto when configured
 npm run bml-live             # inspect persisted BML state / prompts
 ```

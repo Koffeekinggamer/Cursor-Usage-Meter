@@ -53,9 +53,10 @@ Grok-4.5-Usage-Meter.
 The coach saves each prompt in Cursor Usage Meter app data (or
 `CUM_COPY_FILE`), copies it to the macOS clipboard, activates Cursor, pastes
 into the Agent input with ⌘⇧V, and sends it (Return). Requires macOS
-Accessibility for the Meter / osascript. The checklist still waits on
-**Continue** after each skill finishes. Opt out with `CUM_BML_PASTE=0`.
-Optional `CUM_BML_SDK=1` uses the Cursor SDK instead when configured.
+Accessibility for the Meter / osascript. By default it waits for Agent
+activity to go idle, then auto-starts the next skill (`CUM_BML_AUTO_CONTINUE=0`
+restores a manual Continue gate). Optional `CUM_BML_SDK=1` uses the Cursor SDK
+instead when configured.
 
 **Skill roots**:
 `CUM_SKILLS_ROOT`, `.cursor/skills`, `.agents/skills`, and `skills` in the

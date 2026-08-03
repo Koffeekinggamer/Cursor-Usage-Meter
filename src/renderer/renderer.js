@@ -82,16 +82,28 @@ function applyBml(view) {
   const bmlRun = document.getElementById("bmlRun");
   const bmlStatus = document.getElementById("bmlStatus");
   const awaiting = Boolean(view.awaitingConfirm);
-  if (bmlConfirm) bmlConfirm.hidden = !awaiting;
+  if (bmlConfirm) {
+    bmlConfirm.hidden = !awaiting;
+    bmlConfirm.textContent = view.autoContinue ? "Next now" : "Continue";
+    bmlConfirm.title = view.autoContinue
+      ? "Skip the idle wait and start the next skill now"
+      : "Mark this skill done after Agent finishes, then copy the next";
+  }
   if (bmlRun) bmlRun.hidden = awaiting;
   if (bmlStatus) {
-    // Clipboard/confirm guidance is the Continue button — don't dump paths here.
-    const raw = awaiting
-      ? ""
-      : view.lastError ||
-        (view.lastInject?.ok === false ? view.lastInject?.detail : "") ||
-        "";
-    const text = shortenBmlStatus(raw);
+    // Hide clipboard fluff; show live auto-continue / error status.
+    const raw = view.injectStatus || view.lastInject?.detail || "";
+    const isLive =
+      /auto-continu|Agent (running|working)|Waiting for Agent|Auto-continued|Chain done/i.test(
+        raw
+      );
+    const text = shortenBmlStatus(
+      isLive
+        ? raw
+        : view.lastError ||
+            (view.lastInject?.ok === false ? view.lastInject?.detail : "") ||
+            ""
+    );
     bmlStatus.hidden = !text;
     bmlStatus.textContent = text;
     bmlStatus.title = text;

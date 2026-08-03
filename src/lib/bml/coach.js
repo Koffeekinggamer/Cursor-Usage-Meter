@@ -39,6 +39,10 @@ const {
   synthesizeTicketFromProject,
 } = require("./project-context");
 const { writePromptLog } = require("./prompt-log");
+const {
+  waitForAgentIdle,
+  wantAutoContinue,
+} = require("./agent-idle");
 
 /**
  * @param {{
@@ -46,6 +50,7 @@ const { writePromptLog } = require("./prompt-log");
  *   appData?: string,
  *   github?: ReturnType<typeof createGithubClient>,
  *   inject?: typeof injectIntoCursor,
+ *   waitForAgentIdle?: typeof waitForAgentIdle,
  * }} [opts]
  */
 function createBmlCoach(opts = {}) {
@@ -58,6 +63,7 @@ function createBmlCoach(opts = {}) {
   let state = loadBmlState(statePath);
   const github = opts.github || createGithubClient();
   const inject = opts.inject || injectIntoCursor;
+  const waitIdle = opts.waitForAgentIdle || waitForAgentIdle;
   /** Cooperative cancel for chain + single-skill runs (and kills active inject). */
   let cancelRequested = false;
   /** Last Cursor workspace cwd BML is bound to (null until first sync). */
@@ -131,6 +137,87 @@ function createBmlCoach(opts = {}) {
     state = reduceBmlState(state, action);
     persist();
     return getView();
+  }
+
+  /**
+   * After clipboard paste/send: wait for Agent to go idle, then strike the step.
+   * @param {{
+   *   stepIndex: number,
+   *   command?: string|null,
+   *   preferCwd?: string|null,
+   *   onProgress?: ((view: object) => void)|null,
+   *   keepRunning?: boolean,
+   *   startedAt?: number,
+   *   tokensIn?: number,
+   *   tokensOutEst?: number,
+   * }} args
+   * @returns {Promise<{ advanced: boolean, cancelled: boolean }>}
+   */
+  async function autoCompleteAfterInject(args) {
+    const i = args.stepIndex;
+    const preferCwd = args.preferCwd || process.cwd();
+    const onProgress = args.onProgress || null;
+
+    dispatch({
+      type: "inject/result",
+      ok: true,
+      method: state.lastInject?.method || "clipboard",
+      needsConfirm: true,
+      continueChain: true,
+      stepIndex: i,
+      command: args.command || null,
+      detail: `Agent running ${args.command || `step ${i + 1}`}… will auto-continue when idle.`,
+    });
+    if (args.keepRunning) {
+      dispatch({
+        type: "run/cost",
+        patch: {
+          running: true,
+          step: i + 1,
+          total: SKILL_CHAIN.length,
+          startedAt: args.startedAt || Date.now(),
+          elapsedMs: args.startedAt ? Date.now() - args.startedAt : 0,
+          tokensIn: args.tokensIn || 0,
+          tokensOutEst: args.tokensOutEst || 0,
+        },
+      });
+    }
+    if (onProgress) onProgress(getView());
+
+    const settled = await waitIdle({
+      cwd: preferCwd,
+      env: process.env,
+      isCancelled: () => cancelRequested,
+      onTick: (info) => {
+        dispatch({
+          type: "inject/result",
+          ok: true,
+          method: state.lastInject?.method || "clipboard",
+          needsConfirm: true,
+          continueChain: true,
+          stepIndex: i,
+          command: args.command || null,
+          detail: `${info.detail} (${i + 1}/${SKILL_CHAIN.length})`,
+        });
+        if (onProgress) onProgress(getView());
+      },
+    });
+
+    if (cancelRequested || !settled.ok) {
+      return { advanced: false, cancelled: true };
+    }
+
+    dispatch({ type: "build/step", index: i + 1 });
+    dispatch({
+      type: "inject/result",
+      ok: true,
+      method: "auto-continued",
+      needsConfirm: false,
+      stepIndex: i,
+      command: args.command || null,
+      detail: `Auto-continued after ${args.command || `step ${i + 1}`} (${settled.reason}).`,
+    });
+    return { advanced: true, cancelled: false };
   }
 
   function gateContext() {
@@ -268,6 +355,7 @@ function createBmlCoach(opts = {}) {
       canCancel: Boolean(rc.running) || cancelRequested,
       cancelRequested,
       awaitingConfirm: Boolean(state.lastInject?.needsConfirm),
+      autoContinue: wantAutoContinue(process.env),
       injectStatus: state.lastInject?.detail || null,
       jobBrief:
         state.fields?.hypothesis ||
@@ -722,6 +810,26 @@ function createBmlCoach(opts = {}) {
         }
       }
 
+      if (
+        solo &&
+        state.lastInject?.ok &&
+        state.lastInject?.needsConfirm &&
+        wantAutoContinue(process.env) &&
+        !cancelRequested
+      ) {
+        const done = await autoCompleteAfterInject({
+          stepIndex: i,
+          command: step?.command,
+          preferCwd,
+          onProgress,
+          keepRunning: true,
+          startedAt,
+        });
+        if (done.cancelled || cancelRequested) {
+          return finishSolo({ cancelled: true });
+        }
+      }
+
       return finishSolo({
         cancelled:
           cancelRequested ||
@@ -921,8 +1029,40 @@ function createBmlCoach(opts = {}) {
           ok: Boolean(state.lastInject?.ok),
         });
 
-        // Clipboard paste is not real work — pause for user confirmation.
+        // Clipboard paste/send: auto-wait for Agent idle, then next skill (default).
+        // Set CUM_BML_AUTO_CONTINUE=0 to pause for manual Continue instead.
         if (state.lastInject?.needsConfirm) {
+          if (wantAutoContinue(process.env)) {
+            const done = await autoCompleteAfterInject({
+              stepIndex: i,
+              command: step?.command,
+              preferCwd: project.cwd || process.cwd(),
+              onProgress,
+              keepRunning: true,
+              startedAt,
+              tokensIn,
+              tokensOutEst,
+            });
+            if (done.cancelled || cancelRequested) {
+              cancelled = true;
+              break;
+            }
+            dispatch({
+              type: "run/cost",
+              patch: {
+                running: true,
+                step: i + 1,
+                total: SKILL_CHAIN.length,
+                startedAt,
+                elapsedMs: Date.now() - startedAt,
+                tokensIn,
+                tokensOutEst,
+              },
+            });
+            if (onProgress) onProgress(getView());
+            continue;
+          }
+
           dispatch({
             type: "inject/result",
             ok: true,
@@ -933,7 +1073,7 @@ function createBmlCoach(opts = {}) {
             command: step?.command,
             detail:
               (state.lastInject.detail || "Prompt copied.") +
-              ` Pause: paste into Agent (Auto), then Continue (${i + 1}/${SKILL_CHAIN.length}).`,
+              ` Pause: when Agent finishes, click Continue (${i + 1}/${SKILL_CHAIN.length}).`,
           });
           dispatch({
             type: "run/cost",

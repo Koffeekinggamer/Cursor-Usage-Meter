@@ -111,6 +111,8 @@ function applyBml(view) {
   const bmlRun = document.getElementById("bmlRun");
   const bmlStatus = document.getElementById("bmlStatus");
   const awaiting = Boolean(view.awaitingConfirm);
+  const running = Boolean(view.runCost?.running || bmlBusy);
+  const hasProject = Boolean(view.selectedProjectCwd);
   if (bmlConfirm) {
     bmlConfirm.hidden = !awaiting;
     bmlConfirm.textContent = view.autoContinue ? "Next now" : "Continue";
@@ -118,7 +120,14 @@ function applyBml(view) {
       ? "Skip the idle wait and start the next skill now"
       : "Mark this skill done after Agent finishes, then copy the next";
   }
-  if (bmlRun) bmlRun.hidden = awaiting;
+  if (bmlRun) {
+    bmlRun.hidden = awaiting;
+    bmlRun.disabled = awaiting || running || !hasProject;
+    bmlRun.textContent = running ? "Starting…" : "Start";
+    bmlRun.title = !hasProject
+      ? "Select a project above, then Start"
+      : "Start the BML skill chain for the selected project";
+  }
   if (bmlStatus) {
     // Hide clipboard fluff; show live auto-continue / error status.
     const raw = view.injectStatus || view.lastInject?.detail || "";
@@ -131,6 +140,9 @@ function applyBml(view) {
         ? raw
         : view.lastError ||
             (view.lastInject?.ok === false ? view.lastInject?.detail : "") ||
+            (!hasProject && view.panelOpen
+              ? "Select a project, then press Start."
+              : "") ||
             ""
     );
     bmlStatus.hidden = !text;
@@ -310,8 +322,22 @@ bmlChain?.addEventListener("click", (e) => {
   if (li && li.getAttribute("aria-disabled") !== "true") runSingleSkill(Number(li.dataset.stepIndex));
 });
 document.getElementById("bmlRun")?.addEventListener("click", async () => {
-  if (bmlBusy) return; bmlBusy = true;
-  try { applyBml(await bmlApi()?.runSkillStep()); } finally { bmlBusy = false; }
+  if (bmlBusy) return;
+  if (!bml?.selectedProjectCwd) {
+    const status = document.getElementById("bmlStatus");
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Select a project, then press Start.";
+      status.title = status.textContent;
+    }
+    return;
+  }
+  bmlBusy = true;
+  try {
+    applyBml(await bmlApi()?.runSkillStep());
+  } finally {
+    bmlBusy = false;
+  }
 });
 document.getElementById("bmlConfirm")?.addEventListener("click", async () => {
   if (bmlBusy) return;

@@ -62,9 +62,9 @@ Both paths fail closed when labels stay idle em-dashes or the canvas looks unpai
 
 The optional **BML** button opens a Build–Measure–Learn coach powered by the
 Matt skills pack. The button only opens the panel — it does not start the
-chain. Pick a project from the dropdown, then **Start / Copy next** (or click
-a single skill line) when you want to run. The dial keeps polling Cursor usage
-on its own schedule.
+chain. Pick a project from the dropdown, then **Start** (or click a single
+skill line) when you want to run. The dial keeps polling Cursor usage on its
+own schedule.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on

@@ -184,21 +184,21 @@ function createWindow() {
 function registerBmlIpc() {
   ipcMain.handle("bml:getState", async () => bmlCoach?.getView() || null);
   ipcMain.handle("bml:setPanelOpen", async (_e, open) => {
-    if (open) applyPanelLayout(true, { focus: false });
+    if (open) applyPanelLayout(true, { focus: true });
     const view = await bmlCoach.setPanelOpen(Boolean(open), {
       autoProcess: false,
     });
-    applyPanelLayout(view.panelOpen, { focus: false });
+    applyPanelLayout(view.panelOpen, { focus: Boolean(open) });
     publishBml(view);
     return view;
   });
   ipcMain.handle("bml:togglePanel", async () => {
     const opening = !bmlCoach?.getState()?.panelOpen;
-    if (opening) applyPanelLayout(true, { focus: false });
+    if (opening) applyPanelLayout(true, { focus: true });
     const view = await bmlCoach.togglePanel({
       autoProcess: false,
     });
-    applyPanelLayout(view.panelOpen, { focus: false });
+    applyPanelLayout(view.panelOpen, { focus: view.panelOpen });
     publishBml(view);
     return view;
   });

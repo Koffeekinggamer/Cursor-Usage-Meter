@@ -47,8 +47,8 @@ _Avoid_: Autostart service, daemon, LaunchAgent (implementation detail)
 **BML coach**:
 The optional Meter panel that organizes Matt skills into a Build–Measure–Learn
 chain for a **user-selected project** (dropdown in the BML header). The BML
-button only opens the side panel; the user starts the chain with **Start /
-Copy next** or by clicking a single skill line. It does not follow the active
+button only opens the side panel; the user starts the chain with **Start**
+or by clicking a single skill line. It does not follow the active
 Cursor chat. Independent of usage polling and of Grok-4.5-Usage-Meter. CLI
 `npm run bml-run-auto` still resolves the live open chat (or `CUM_BML_CWD`)
 without opening the Meter UI.

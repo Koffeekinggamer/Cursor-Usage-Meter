@@ -21,6 +21,12 @@ describe("BML clipboard confirm gate", () => {
     process.env.CUM_BML_AUTO_CONTINUE = "0";
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-confirm-"));
     const statePath = path.join(dir, "bml-state.json");
+    const proj = path.join(dir, "app");
+    fs.mkdirSync(proj);
+    fs.writeFileSync(
+      path.join(proj, "package.json"),
+      JSON.stringify({ name: "confirm-app" })
+    );
     let injects = 0;
     const coach = createBmlCoach({
       statePath,
@@ -34,6 +40,7 @@ describe("BML clipboard confirm gate", () => {
         };
       },
     });
+    coach.setSelectedProject(proj);
 
     const paused = await coach.runAllSkillSteps();
     assert.equal(injects, 1, "only first skill copied");
@@ -54,6 +61,12 @@ describe("BML clipboard confirm gate", () => {
     process.env.CUM_BML_AUTO_CONTINUE = "1";
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-auto-"));
     const statePath = path.join(dir, "bml-state.json");
+    const proj = path.join(dir, "app");
+    fs.mkdirSync(proj);
+    fs.writeFileSync(
+      path.join(proj, "package.json"),
+      JSON.stringify({ name: "auto-app" })
+    );
     let injects = 0;
     let waits = 0;
     const coach = createBmlCoach({
@@ -77,6 +90,7 @@ describe("BML clipboard confirm gate", () => {
         return { ok: true, reason: "idle" };
       },
     });
+    coach.setSelectedProject(proj);
 
     await coach.runAllSkillSteps();
     assert.equal(injects, 2, "second skill started after auto-continue");
@@ -89,6 +103,12 @@ describe("BML clipboard confirm gate", () => {
     process.env.CUM_BML_AUTO_CONTINUE = "0";
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-sdk-"));
     const statePath = path.join(dir, "bml-state.json");
+    const proj = path.join(dir, "app");
+    fs.mkdirSync(proj);
+    fs.writeFileSync(
+      path.join(proj, "package.json"),
+      JSON.stringify({ name: "sdk-app" })
+    );
     let injects = 0;
     const coach = createBmlCoach({
       statePath,
@@ -97,6 +117,7 @@ describe("BML clipboard confirm gate", () => {
         return { ok: true, method: "sdk-auto", detail: "ran" };
       },
     });
+    coach.setSelectedProject(proj);
     const view = await coach.runSkillStep(0, { trackCost: true });
     assert.equal(injects, 1);
     assert.equal(view.awaitingConfirm, false);

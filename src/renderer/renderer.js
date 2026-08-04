@@ -70,6 +70,35 @@ function shortenBmlStatus(text) {
     .trim();
 }
 
+function fillBmlProjectSelect(view) {
+  const sel = document.getElementById("bmlProjectSelect");
+  if (!sel) return;
+  const choices = Array.isArray(view.projectChoices) ? view.projectChoices : [];
+  const selected = view.selectedProjectCwd || "";
+  const nextValues = choices.map((c) => c.cwd).join("\0");
+  if (sel.dataset.choiceKey !== nextValues) {
+    sel.dataset.choiceKey = nextValues;
+    sel.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a project…";
+    sel.appendChild(placeholder);
+    for (const c of choices) {
+      const opt = document.createElement("option");
+      opt.value = c.cwd;
+      opt.textContent = c.name || pathBasename(c.cwd);
+      sel.appendChild(opt);
+    }
+  }
+  if (sel.value !== selected) sel.value = selected;
+}
+
+function pathBasename(p) {
+  const s = String(p || "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
 function applyBml(view) {
   if (!view) return;
   bml = view;
@@ -130,11 +159,7 @@ function applyBml(view) {
     bmlCost.textContent = cost;
     bmlCost.title = cost.replace(/\n/g, " · ");
   }
-  const bmlProject = document.getElementById("bmlProject");
-  if (bmlProject) {
-    bmlProject.hidden = true;
-    bmlProject.textContent = "";
-  }
+  fillBmlProjectSelect(view);
   const measure = view.measure || {};
   document.getElementById("mDuration").checked = Boolean(measure.durationElapsed);
   document.getElementById("mKill").checked = Boolean(measure.killHit);
@@ -271,6 +296,15 @@ async function runSingleSkill(index) {
   finally { bmlBusy = false; }
 }
 bmlBtn?.addEventListener("click", async (e) => { e.stopPropagation(); applyBml(await bmlApi()?.togglePanel()); });
+document.getElementById("bmlProjectSelect")?.addEventListener("change", async (e) => {
+  e.stopPropagation();
+  const cwd = e.target.value || null;
+  try {
+    applyBml(await bmlApi()?.setSelectedProject(cwd));
+  } catch {
+    // ignore
+  }
+});
 bmlChain?.addEventListener("click", (e) => {
   const li = e.target?.closest?.("li[data-step-index]");
   if (li && li.getAttribute("aria-disabled") !== "true") runSingleSkill(Number(li.dataset.stepIndex));

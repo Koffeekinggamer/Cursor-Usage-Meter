@@ -3,9 +3,11 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
+const os = require("os");
 const {
   cwdFromFolderUri,
   listCursorWorkspaces,
+  listSelectableProjects,
   resolveChatSession,
   meterSelfRoots,
 } = require("../src/lib/bml/active-session");
@@ -233,5 +235,22 @@ describe("glass-session", () => {
     assert.equal(session.cwd, "/home/FAF-pricelist-2.0");
     assert.equal(session.source, "glass_selected_cloud");
     assert.equal(session.kind, "cloud");
+  });
+});
+
+describe("listSelectableProjects", () => {
+  it("dedupes workspaces and env cwd", () => {
+    const home = os.homedir();
+    const list = listSelectableProjects({
+      env: { CUM_BML_CWD: home },
+      home,
+      existsSync: (p) => path.resolve(p) === path.resolve(home),
+      listWorkspaces: () => [
+        { cwd: home, mtimeMs: 1 },
+        { cwd: home, mtimeMs: 2 },
+      ],
+    });
+    const homes = list.filter((p) => p.cwd === path.resolve(home));
+    assert.equal(homes.length, 1);
   });
 });

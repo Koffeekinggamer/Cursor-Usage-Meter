@@ -31,7 +31,7 @@
           <button
             type="button"
             id="bmlBtn"
-            title="BML Process (active Cursor workspace = experiment)"
+            title="BML Process — pick a project in the panel"
             aria-expanded="false"
             aria-controls="bmlPanel"
           >
@@ -43,7 +43,16 @@
       <div id="bmlPanel" hidden>
         <header class="bml-head">
           <strong>BML Process</strong>
-          <span id="bmlProject" class="bml-project" hidden></span>
+          <label class="bml-project-picker">
+            <span class="visually-hidden">Project</span>
+            <select
+              id="bmlProjectSelect"
+              title="Choose which project BML runs against"
+              aria-label="BML project"
+            >
+              <option value="">Select a project…</option>
+            </select>
+          </label>
         </header>
 
         <section class="bml-section" id="bmlBuildSection">

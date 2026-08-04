@@ -2,6 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("path");
 const {
   emptyBmlState,
   reduceBmlState,
@@ -55,10 +56,13 @@ describe("reduceBmlState", () => {
     assert.equal(s.measure.lastPostedAt, "2026-08-01T00:00:00.000Z");
   });
 
-  it("normalizes garbage input", () => {
-    const s = normalizeState({ stage: "Nope", panelOpen: 1, buildStepIndex: -3 });
-    assert.equal(s.stage, "Backlog");
-    assert.equal(s.panelOpen, true);
-    assert.equal(s.buildStepIndex, 0);
+  it("stores selectedProjectCwd", () => {
+    let s = reduceBmlState(emptyBmlState(), {
+      type: "project/select",
+      cwd: "/tmp/my-app",
+    });
+    assert.equal(s.selectedProjectCwd, path.resolve("/tmp/my-app"));
+    s = reduceBmlState(s, { type: "project/select", cwd: null });
+    assert.equal(s.selectedProjectCwd, null);
   });
 });

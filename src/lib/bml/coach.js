@@ -5,6 +5,7 @@
  */
 
 const path = require("path");
+const fs = require("fs");
 const {
   emptyBmlState,
   defaultStatePath,
@@ -35,9 +36,11 @@ const { injectIntoCursor, abortActiveInject } = require("./inject");
 const { createGithubClient } = require("./github");
 const {
   loadActiveProjectContext,
+  loadProjectAt,
   formatProjectContextForPrompt,
   synthesizeTicketFromProject,
 } = require("./project-context");
+const { listSelectableProjects } = require("./active-session");
 const { writePromptLog } = require("./prompt-log");
 const {
   waitForAgentIdle,
@@ -66,7 +69,7 @@ function createBmlCoach(opts = {}) {
   const waitIdle = opts.waitForAgentIdle || waitForAgentIdle;
   /** Cooperative cancel for chain + single-skill runs (and kills active inject). */
   let cancelRequested = false;
-  /** Last Cursor workspace cwd BML is bound to (null until first sync). */
+  /** Last user-selected project cwd BML is bound to (null until picked). */
   let boundCwd = null;
   let boundAgentId = null;
 
@@ -87,8 +90,41 @@ function createBmlCoach(opts = {}) {
     }
   }
 
+  function selectedCwd() {
+    return (
+      normalizeCwd(process.env.CUM_BML_CWD || process.env.GUM_BML_CWD) ||
+      normalizeCwd(state.selectedProjectCwd)
+    );
+  }
+
+  function projectChoices() {
+    try {
+      const list = listSelectableProjects({ env: process.env });
+      const prefer = selectedCwd();
+      if (prefer && !list.some((p) => p.cwd === prefer)) {
+        try {
+          if (fs.existsSync(prefer)) {
+            list.push({
+              cwd: prefer,
+              name: path.basename(prefer),
+              source: "selected",
+            });
+            list.sort((a, b) =>
+              a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+            );
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return list;
+    } catch {
+      return [];
+    }
+  }
+
   /**
-   * Rebind BML to the open Cursor Agent chat (per chat, not Meter-only).
+   * Rebind BML to the user-selected project (dropdown), not the open chat.
    * Usage/token polling is independent — this only updates coach state.
    * @param {{ force?: boolean }} [opts]
    * @returns {{ changed: boolean, project: import('./project-context').ProjectContext|null }}
@@ -102,18 +138,10 @@ function createBmlCoach(opts = {}) {
       project = null;
     }
     const cwd = normalizeCwd(project?.cwd);
-    const agentId =
-      project?.sessionId && project.sessionId !== "cursor-workspace"
-        ? String(project.sessionId)
-        : null;
-    const changed = Boolean(
-      (cwd && cwd !== boundCwd) ||
-        (agentId && agentId !== boundAgentId) ||
-        (!agentId && boundAgentId && cwd && cwd !== boundCwd)
-    );
+    const changed = Boolean(cwd && cwd !== boundCwd);
 
     if (changed || (force && cwd && !boundCwd)) {
-      if (changed && (boundCwd || boundAgentId)) {
+      if (changed && boundCwd) {
         cancelRequested = true;
         try {
           abortActiveInject();
@@ -133,10 +161,13 @@ function createBmlCoach(opts = {}) {
         persist();
       }
       boundCwd = cwd;
-      boundAgentId = agentId;
+      boundAgentId = null;
     }
 
-    if (cwd) {
+    if (!cwd) {
+      boundCwd = null;
+      boundAgentId = null;
+    } else {
       ensureExperimentFromChatProject();
     }
 
@@ -247,14 +278,27 @@ function createBmlCoach(opts = {}) {
   }
 
   function activeProject() {
-    return loadActiveProjectContext({
-      preferCwd: process.env.CUM_BML_CWD || process.env.GUM_BML_CWD || null,
-    });
+    const prefer = selectedCwd();
+    if (!prefer) return null;
+    try {
+      return loadProjectAt(prefer, {
+        sessionId: null,
+        sessionLive: false,
+        sessionSource: "user_selected",
+        boundToChat: false,
+      });
+    } catch {
+      try {
+        return loadActiveProjectContext({ preferCwd: prefer });
+      } catch {
+        return null;
+      }
+    }
   }
 
   /**
-   * The active chat project IS the experiment. Bind issue + synthesize
-   * Build/Measure from that repo whenever the chat project changes.
+   * The dropdown-selected project IS the experiment. Bind issue + synthesize
+   * Build/Measure from that repo whenever the selection changes.
    * Mutates `state` via reduce (no dispatch) to avoid getView recursion.
    */
   function ensureExperimentFromChatProject() {
@@ -396,6 +440,8 @@ function createBmlCoach(opts = {}) {
         : null,
       boundCwd,
       boundAgentId,
+      selectedProjectCwd: selectedCwd(),
+      projectChoices: projectChoices(),
     };
   }
 
@@ -430,8 +476,7 @@ function createBmlCoach(opts = {}) {
     syncActiveProject,
 
     /**
-     * Open/close BML. Opening rebinds to the live open Agent chat and starts
-     * processing that instance (copy next skill) without touching usage polling.
+     * Open/close BML. Opening uses the dropdown-selected project (if any).
      * @param {boolean} open
      * @param {{
      *   autoProcess?: boolean,
@@ -443,26 +488,66 @@ function createBmlCoach(opts = {}) {
       if (!open) return getView();
 
       const prevCwd = boundCwd;
-      const prevAgent = boundAgentId;
-      const { changed } = syncActiveProject({ force: true });
+      const { changed, project } = syncActiveProject({ force: true });
       const onProgress =
         typeof opts.onProgress === "function" ? opts.onProgress : null;
       const autoProcess = opts.autoProcess !== false;
 
+      if (!project?.cwd) {
+        return dispatch({
+          type: "error",
+          message: "Select a project in the BML dropdown to start.",
+        });
+      }
+
       if (!autoProcess) return getView();
 
-      // Keep an in-flight paste confirmation for the same chat.
       if (
         !changed &&
         state.lastInject?.needsConfirm &&
-        prevCwd === boundCwd &&
-        prevAgent === boundAgentId
+        prevCwd === boundCwd
       ) {
         return getView();
       }
 
       if (onProgress) onProgress(getView());
       return this.runAllSkillSteps({ onProgress });
+    },
+
+    /**
+     * User picked a project from the BML dropdown.
+     * @param {string|null|undefined} cwd
+     */
+    setSelectedProject(cwd) {
+      const next = normalizeCwd(cwd);
+      const prev = selectedCwd();
+      dispatch({ type: "project/select", cwd: next });
+      if (next && next !== prev) {
+        cancelRequested = true;
+        try {
+          abortActiveInject();
+        } catch {
+          // ignore
+        }
+        cancelRequested = false;
+        state = reduceBmlState(state, { type: "run/reset" });
+        state = reduceBmlState(state, { type: "build/step", index: 0 });
+        state = {
+          ...state,
+          activeIssue: null,
+          fields: { ...EMPTY_FIELDS },
+          stage: "Build",
+          tinyBuild: false,
+          selectedProjectCwd: next,
+        };
+        persist();
+        boundCwd = null;
+      } else if (!next) {
+        boundCwd = null;
+        boundAgentId = null;
+      }
+      syncActiveProject({ force: true });
+      return getView();
     },
 
     async togglePanel(opts = {}) {
@@ -729,6 +814,12 @@ function createBmlCoach(opts = {}) {
       }
 
       const project = activeProject();
+      if (!project?.cwd) {
+        return dispatch({
+          type: "error",
+          message: "Select a project in the BML dropdown to start.",
+        });
+      }
       const preferCwd =
         process.env.CUM_BML_CWD || process.env.GUM_BML_CWD || project.cwd || process.cwd();
       const projectBlock = formatProjectContextForPrompt(project);
@@ -903,9 +994,14 @@ function createBmlCoach(opts = {}) {
       const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
       cancelRequested = false;
 
-      // Active chat project = experiment; synthesize Build/Measure from that repo
       ensureExperimentFromChatProject();
       const project = activeProject();
+      if (!project?.cwd) {
+        return dispatch({
+          type: "error",
+          message: "Select a project in the BML dropdown to start.",
+        });
+      }
       const fields =
         state.fields && validateBacklogReady(state.fields).ok
           ? state.fields

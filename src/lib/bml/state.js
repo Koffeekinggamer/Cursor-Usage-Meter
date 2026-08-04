@@ -53,6 +53,7 @@ const { getMeterDataDir } = require("../paths");
  *     lastDurationMs: number|null,
  *     lastTokensEst: number|null,
  *   },
+ *   selectedProjectCwd: string|null,
  * }} BmlState
  */
 
@@ -96,6 +97,7 @@ function emptyBmlState() {
       lastDurationMs: null,
       lastTokensEst: null,
     },
+    selectedProjectCwd: null,
   };
 }
 
@@ -203,6 +205,10 @@ function normalizeState(raw) {
         : null,
     lastPrompt: normalizeLastPrompt(r.lastPrompt),
     runCost: normalizeRunCost(r.runCost),
+    selectedProjectCwd:
+      typeof r.selectedProjectCwd === "string" && r.selectedProjectCwd.trim()
+        ? path.resolve(String(r.selectedProjectCwd).trim())
+        : null,
   };
 }
 
@@ -457,6 +463,18 @@ function reduceBmlState(previous, action) {
           ...emptyBmlState().runCost,
         },
       };
+    case "project/select": {
+      const raw = action.cwd;
+      const cwd =
+        typeof raw === "string" && raw.trim()
+          ? path.resolve(String(raw).trim())
+          : null;
+      return {
+        ...prev,
+        selectedProjectCwd: cwd,
+        lastError: null,
+      };
+    }
     default:
       return prev;
   }

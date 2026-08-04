@@ -14,6 +14,7 @@ describe("BML project switch", () => {
     prevAuto = process.env.CUM_BML_AUTO_CONTINUE;
     prevCwd = process.env.CUM_BML_CWD;
     process.env.CUM_BML_AUTO_CONTINUE = "0";
+    delete process.env.CUM_BML_CWD;
   });
   afterEach(() => {
     if (prevAuto === undefined) delete process.env.CUM_BML_AUTO_CONTINUE;
@@ -22,7 +23,26 @@ describe("BML project switch", () => {
     else process.env.CUM_BML_CWD = prevCwd;
   });
 
-  it("rebinds and auto-processes when the panel opens", async () => {
+  it("requires a dropdown selection before processing", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
+    const statePath = path.join(dir, "bml-state.json");
+    const coach = createBmlCoach({
+      statePath,
+      inject: async () => ({
+        ok: true,
+        method: "clipboard",
+        needsConfirm: true,
+        detail: "copied",
+      }),
+    });
+    const opened = await coach.setPanelOpen(true, { autoProcess: true });
+    assert.equal(opened.panelOpen, true);
+    assert.equal(opened.boundCwd, null);
+    assert.match(opened.lastError || "", /Select a project/i);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("rebinds via setSelectedProject and processes on panel open", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
     const statePath = path.join(dir, "bml-state.json");
     const projA = path.join(dir, "proj-a");
@@ -46,7 +66,6 @@ describe("BML project switch", () => {
       "# Grok Usage Meter\nPlan Context Reading Meter\n"
     );
 
-    let cwd = projA;
     let injects = 0;
     const coach = createBmlCoach({
       statePath,
@@ -56,11 +75,18 @@ describe("BML project switch", () => {
           ok: true,
           method: "clipboard",
           needsConfirm: true,
-          detail: `copied for ${cwd}`,
+          detail: "copied",
         };
       },
     });
-    process.env.CUM_BML_CWD = projA;
+
+    const picked = coach.setSelectedProject(projA);
+    assert.equal(picked.selectedProjectCwd, path.resolve(projA));
+    assert.equal(picked.boundCwd, path.resolve(projA));
+    assert.ok(
+      (picked.projectChoices || []).some((c) => c.cwd === path.resolve(projA))
+    );
+
     const opened = await coach.setPanelOpen(true, { autoProcess: true });
     assert.equal(opened.panelOpen, true);
     assert.equal(opened.boundCwd, path.resolve(projA));
@@ -68,12 +94,7 @@ describe("BML project switch", () => {
     assert.equal(opened.awaitingConfirm, true);
     assert.match(opened.project?.appProfile?.id || "", /cursor/);
 
-    cwd = projB;
-    process.env.CUM_BML_CWD = projB;
-    const synced = coach.syncActiveProject();
-    assert.equal(synced.changed, true);
-    assert.equal(path.resolve(synced.project.cwd), path.resolve(projB));
-
+    coach.setSelectedProject(projB);
     const reopened = await coach.setPanelOpen(true, { autoProcess: true });
     assert.equal(reopened.boundCwd, path.resolve(projB));
     assert.ok(injects >= 2, "new project starts its own copy");

@@ -214,6 +214,13 @@ function registerBmlIpc() {
       publishBml(view); return view;
     });
   }
+  ipcMain.handle("bml:setSelectedProject", async (_e, cwd) => {
+    const view = bmlCoach.setSelectedProject(
+      cwd == null || cwd === "" ? null : String(cwd)
+    );
+    publishBml(view);
+    return view;
+  });
   ipcMain.handle("bml:refreshBoard", async () => { const v = await bmlCoach.refreshBoard(); publishBml(v); return v; });
   ipcMain.handle("bml:advanceStage", async (_e, payload) => {
     const v = await bmlCoach.advanceStage({ fields: payload?.fields || null, skipChain: Boolean(payload?.skipChain), onProgress: publishBml });
@@ -265,29 +272,16 @@ function startOverlayAssert() {
 }
 
 /**
- * Watch open Cursor Agent chats for BML only.
- * Rebinds when the live chat / Agent changes — independent of usage polling.
+ * Watch for BML panel only: refresh project dropdown choices.
+ * Does not auto-rebind — the user picks the project in the dropdown.
  */
 function startBmlProjectWatch() {
   if (bmlProjectTimer) clearInterval(bmlProjectTimer);
-  bmlProjectTimer = setInterval(async () => {
+  bmlProjectTimer = setInterval(() => {
     if (!bmlCoach || !mainWindow || mainWindow.isDestroyed()) return;
     try {
-      const before = bmlCoach.getView();
-      const beforeKey = `${before?.boundCwd || ""}::${before?.boundAgentId || ""}`;
-      const { changed } = bmlCoach.syncActiveProject();
-      if (!changed) return;
-      const after = bmlCoach.getView();
-      const afterKey = `${after?.boundCwd || ""}::${after?.boundAgentId || ""}`;
-      publishBml(after);
-      // If BML panel is open, auto-process the new chat instance.
-      if (after.panelOpen) {
-        const view = await bmlCoach.runAllSkillSteps({ onProgress: publishBml });
-        publishBml(view);
-      } else if (beforeKey !== afterKey) {
-        // Panel closed: still rebind quietly so next activate uses the open chat.
-        publishBml(bmlCoach.getView());
-      }
+      if (!bmlCoach.getState()?.panelOpen) return;
+      publishBml(bmlCoach.getView());
     } catch {
       // never interrupt the Meter overlay
     }

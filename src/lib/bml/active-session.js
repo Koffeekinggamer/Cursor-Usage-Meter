@@ -259,10 +259,64 @@ function resolveChatSession(opts = {}) {
   };
 }
 
+/**
+ * Projects available for the BML dropdown (user picks — not auto-bound).
+ * Includes recent Cursor workspace folders; Meter roots stay selectable.
+ * @param {{
+ *   env?: NodeJS.ProcessEnv,
+ *   home?: string,
+ *   listWorkspaces?: typeof listCursorWorkspaces,
+ *   existsSync?: typeof fs.existsSync,
+ * }} [opts]
+ * @returns {{ cwd: string, name: string, source: string }[]}
+ */
+function listSelectableProjects(opts = {}) {
+  const env = opts.env ?? process.env;
+  const home = opts.home ?? os.homedir();
+  const exists = opts.existsSync || fs.existsSync;
+  const list = opts.listWorkspaces || listCursorWorkspaces;
+  /** @type {Map<string, { cwd: string, name: string, source: string }>} */
+  const byCwd = new Map();
+
+  const add = (cwd, name, source) => {
+    if (!cwd) return;
+    let resolved;
+    try {
+      resolved = path.resolve(String(cwd));
+    } catch {
+      return;
+    }
+    if (!exists(resolved)) return;
+    if (byCwd.has(resolved)) return;
+    const label =
+      (name && String(name).trim()) ||
+      path.basename(resolved) ||
+      resolved;
+    byCwd.set(resolved, { cwd: resolved, name: label, source });
+  };
+
+  for (const ws of list({ env, home, excludeCwds: new Set() })) {
+    add(ws.cwd, path.basename(ws.cwd), "cursor_workspace");
+  }
+
+  for (const root of meterSelfRoots(env)) {
+    add(root, path.basename(root), "meter_root");
+  }
+
+  if (env.CUM_BML_CWD) {
+    add(env.CUM_BML_CWD, path.basename(env.CUM_BML_CWD), "env");
+  }
+
+  return [...byCwd.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+}
+
 module.exports = {
   cwdFromFolderUri,
   latestActivityMs,
   listCursorWorkspaces,
+  listSelectableProjects,
   meterSelfRoots,
   resolveChatSession,
 };

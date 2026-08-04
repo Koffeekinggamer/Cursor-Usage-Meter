@@ -11,6 +11,12 @@ describe("BML cancel", () => {
   it("cancelRun stops chain before remaining skills", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gum-cancel-"));
     const statePath = path.join(dir, "bml-state.json");
+    const proj = path.join(dir, "app");
+    fs.mkdirSync(proj);
+    fs.writeFileSync(
+      path.join(proj, "package.json"),
+      JSON.stringify({ name: "cancel-app" })
+    );
     let injects = 0;
     /** @type {ReturnType<typeof createBmlCoach>} */
     let coach;
@@ -24,6 +30,7 @@ describe("BML cancel", () => {
       return { ok: true, method: "headless", detail: "ok" };
     };
     coach = createBmlCoach({ statePath, inject });
+    coach.setSelectedProject(proj);
     const view = await coach.runAllSkillSteps();
     assert.ok(injects >= 1);
     assert.ok(injects < 13, `expected early stop, got ${injects} injects`);

@@ -385,10 +385,10 @@ function formatProjectContextForPrompt(project) {
   if (!project?.cwd) return "";
   const profile = project.appProfile || detectAppProfile(project);
   const lines = [
-    "## Active chat project (source of Build + Measure nature)",
-    project.boundToChat
-      ? "Bound to Cursor's focused Agent / open task — use THIS repo for the experiment."
-      : "WARNING: No focused Cursor Agent found; falling back. Prefer focusing the target Agent in Cursor.",
+    "## Selected BML project (source of Build + Measure nature)",
+    project.sessionSource === "user_selected" || project.boundToChat === false
+      ? "Bound to the project chosen in the Meter BML dropdown — use THIS repo for the experiment."
+      : "Bound to Cursor's focused Agent / open task — use THIS repo for the experiment.",
     `Path: ${project.cwd}`,
     project.name ? `Name: ${project.name}` : null,
     project.description ? `Description: ${project.description}` : null,

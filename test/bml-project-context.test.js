@@ -69,7 +69,7 @@ describe("loadProjectAt", () => {
       assert.ok(p.technicalHints.includes("@src"));
 
       const block = formatProjectContextForPrompt(p);
-      assert.match(block, /Active chat project/);
+      assert.match(block, /Selected BML project/);
       assert.match(block, /Build nature/);
       assert.match(block, /Measure nature/);
       assert.match(block, /admin-tools/);

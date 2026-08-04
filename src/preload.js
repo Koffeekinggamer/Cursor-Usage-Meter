@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld("tokenMeter", {
     postMeasure: (note) => ipcRenderer.invoke("bml:postMeasure", note),
     recordLearn: (payload) => ipcRenderer.invoke("bml:recordLearn", payload),
     setStep: (index) => ipcRenderer.invoke("bml:setStep", index),
+    setSelectedProject: (cwd) => ipcRenderer.invoke("bml:setSelectedProject", cwd),
     openUrl: (url) => ipcRenderer.invoke("bml:openUrl", url),
   },
 });

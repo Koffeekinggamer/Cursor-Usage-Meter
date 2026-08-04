@@ -46,19 +46,17 @@ _Avoid_: Autostart service, daemon, LaunchAgent (implementation detail)
 
 **BML coach**:
 The optional Meter panel that organizes Matt skills into a Build–Measure–Learn
-chain for the **open Cursor Agent chat** (transcript activity + Glass
-`selectedAgent`), not the Meter app itself. It is independent of usage polling
-and of Grok-4.5-Usage-Meter. CLI `npm run bml-run-auto` runs `/ask-matt` for the
-same live chat without opening the Meter UI.
+chain for a **user-selected project** (dropdown in the BML header). It does not
+follow the active Cursor chat. Independent of usage polling and of
+Grok-4.5-Usage-Meter. CLI `npm run bml-run-auto` still resolves the live open
+chat (or `CUM_BML_CWD`) without opening the Meter UI.
 
 **Cursor inject**:
-The coach binds to the **live open Agent** — preferring recent
-`~/.cursor/projects/*/agent-transcripts/{agentId}` activity, then
-`cursor/glass.selectedAgent` in state.vscdb. Local Agents use their file
-workspace; cloud Agents map to a local clone via `repoUrl`. Env `CUM_BML_CWD`
-still wins as an explicit override. Meter checkouts are excluded from the
-workspaceStorage mtime fallback so BML does not stick on Usage Meter while you
-work elsewhere. Rebinds when the open **chat / agentId** changes, not only cwd.
+In the Meter UI, the coach binds to the **dropdown-selected project** (persisted
+as `selectedProjectCwd`). Env `CUM_BML_CWD` overrides the selection. The
+dropdown lists recent Cursor workspaces plus Meter roots. Pastes still go into
+the focused Cursor Agent input (⌘⇧V); only the *experiment repo* is chosen
+manually.
 
 It saves each prompt, copies to the clipboard, activates Cursor, pastes into
 the Agent input with ⌘⇧V, and sends it. Requires Accessibility for the Meter /

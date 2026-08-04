@@ -476,7 +476,8 @@ function createBmlCoach(opts = {}) {
     syncActiveProject,
 
     /**
-     * Open/close BML. Opening uses the dropdown-selected project (if any).
+     * Open/close BML panel. Does not start the skill chain unless
+     * `autoProcess: true` (opt-in; Meter UI always opens idle).
      * @param {boolean} open
      * @param {{
      *   autoProcess?: boolean,
@@ -491,7 +492,9 @@ function createBmlCoach(opts = {}) {
       const { changed, project } = syncActiveProject({ force: true });
       const onProgress =
         typeof opts.onProgress === "function" ? opts.onProgress : null;
-      const autoProcess = opts.autoProcess !== false;
+      const autoProcess = opts.autoProcess === true;
+
+      if (!autoProcess) return getView();
 
       if (!project?.cwd) {
         return dispatch({
@@ -499,8 +502,6 @@ function createBmlCoach(opts = {}) {
           message: "Select a project in the BML dropdown to start.",
         });
       }
-
-      if (!autoProcess) return getView();
 
       if (
         !changed &&

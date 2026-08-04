@@ -186,8 +186,7 @@ function registerBmlIpc() {
   ipcMain.handle("bml:setPanelOpen", async (_e, open) => {
     if (open) applyPanelLayout(true, { focus: false });
     const view = await bmlCoach.setPanelOpen(Boolean(open), {
-      autoProcess: true,
-      onProgress: publishBml,
+      autoProcess: false,
     });
     applyPanelLayout(view.panelOpen, { focus: false });
     publishBml(view);
@@ -197,8 +196,7 @@ function registerBmlIpc() {
     const opening = !bmlCoach?.getState()?.panelOpen;
     if (opening) applyPanelLayout(true, { focus: false });
     const view = await bmlCoach.togglePanel({
-      autoProcess: true,
-      onProgress: publishBml,
+      autoProcess: false,
     });
     applyPanelLayout(view.panelOpen, { focus: false });
     publishBml(view);

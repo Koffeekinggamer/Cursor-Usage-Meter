@@ -61,9 +61,10 @@ Both paths fail closed when labels stay idle em-dashes or the canvas looks unpai
 ## BML skills coach
 
 The optional **BML** button opens a Build–Measure–Learn coach powered by the
-Matt skills pack. Pick the target repo from the **project dropdown** in the
-BML panel — BML does not follow the active Cursor chat. The dial keeps polling
-Cursor usage on its own schedule.
+Matt skills pack. The button only opens the panel — it does not start the
+chain. Pick a project from the dropdown, then **Start / Copy next** (or click
+a single skill line) when you want to run. The dial keeps polling Cursor usage
+on its own schedule.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on

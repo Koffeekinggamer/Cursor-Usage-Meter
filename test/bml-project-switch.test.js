@@ -23,7 +23,31 @@ describe("BML project switch", () => {
     else process.env.CUM_BML_CWD = prevCwd;
   });
 
-  it("requires a dropdown selection before processing", async () => {
+  it("opens the panel idle without starting the skill chain", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
+    const statePath = path.join(dir, "bml-state.json");
+    let injects = 0;
+    const coach = createBmlCoach({
+      statePath,
+      inject: async () => {
+        injects += 1;
+        return {
+          ok: true,
+          method: "clipboard",
+          needsConfirm: true,
+          detail: "copied",
+        };
+      },
+    });
+    const opened = await coach.setPanelOpen(true);
+    assert.equal(opened.panelOpen, true);
+    assert.equal(injects, 0);
+    assert.equal(opened.awaitingConfirm, false);
+    assert.equal(opened.lastError, null);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("requires a dropdown selection before autoProcess", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
     const statePath = path.join(dir, "bml-state.json");
     const coach = createBmlCoach({
@@ -42,7 +66,7 @@ describe("BML project switch", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("rebinds via setSelectedProject and processes on panel open", async () => {
+  it("rebinds via setSelectedProject; autoProcess starts the chain", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cum-bml-switch-"));
     const statePath = path.join(dir, "bml-state.json");
     const projA = path.join(dir, "proj-a");
@@ -87,18 +111,21 @@ describe("BML project switch", () => {
       (picked.projectChoices || []).some((c) => c.cwd === path.resolve(projA))
     );
 
-    const opened = await coach.setPanelOpen(true, { autoProcess: true });
-    assert.equal(opened.panelOpen, true);
-    assert.equal(opened.boundCwd, path.resolve(projA));
+    const idle = await coach.setPanelOpen(true);
+    assert.equal(idle.panelOpen, true);
+    assert.equal(injects, 0, "panel open alone does not inject");
+
+    const started = await coach.runAllSkillSteps();
+    assert.equal(started.boundCwd, path.resolve(projA));
     assert.equal(injects, 1);
-    assert.equal(opened.awaitingConfirm, true);
-    assert.match(opened.project?.appProfile?.id || "", /cursor/);
+    assert.equal(started.awaitingConfirm, true);
+    assert.match(started.project?.appProfile?.id || "", /cursor/);
 
     coach.setSelectedProject(projB);
-    const reopened = await coach.setPanelOpen(true, { autoProcess: true });
-    assert.equal(reopened.boundCwd, path.resolve(projB));
+    const again = await coach.runAllSkillSteps();
+    assert.equal(again.boundCwd, path.resolve(projB));
     assert.ok(injects >= 2, "new project starts its own copy");
-    assert.match(reopened.project?.appProfile?.id || "", /grok/);
+    assert.match(again.project?.appProfile?.id || "", /grok/);
 
     fs.rmSync(dir, { recursive: true, force: true });
   });

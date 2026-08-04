@@ -307,7 +307,17 @@ async function runSingleSkill(index) {
   try { applyBml(await bmlApi()?.runOneSkillStep(index)); }
   finally { bmlBusy = false; }
 }
-bmlBtn?.addEventListener("click", async (e) => { e.stopPropagation(); applyBml(await bmlApi()?.togglePanel()); });
+bmlBtn?.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  // Dial BML control: open/close the side panel only — never start the chain.
+  const open = !bml?.panelOpen;
+  try {
+    applyBml(await bmlApi()?.setPanelOpen(open));
+  } catch {
+    // ignore
+  }
+});
 document.getElementById("bmlProjectSelect")?.addEventListener("change", async (e) => {
   e.stopPropagation();
   const cwd = e.target.value || null;

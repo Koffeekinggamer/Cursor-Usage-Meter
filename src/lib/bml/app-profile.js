@@ -75,7 +75,8 @@ function detectAppProfile(project) {
       preferSkills: [
         "/ask-matt",
         "/grill-with-docs",
-        "/improve-codebase-architecture",
+        "/to-spec",
+        "/to-tickets",
         "/implement",
         "/code-review",
       ],
@@ -100,7 +101,8 @@ function detectAppProfile(project) {
       preferSkills: [
         "/ask-matt",
         "/grill-with-docs",
-        "/improve-codebase-architecture",
+        "/to-spec",
+        "/to-tickets",
         "/implement",
         "/code-review",
       ],
@@ -131,11 +133,11 @@ function detectAppProfile(project) {
     needles: "n/a",
     preferSkills: [
       "/ask-matt",
-      "/triage",
       "/grill-with-docs",
       "/to-spec",
       "/to-tickets",
       "/implement",
+      "/code-review",
     ],
     routerHint:
       "Generic repo under Cursor. Infer the smallest BML path from CONTEXT.md, package scripts, and tree. Do not assume Meter/Grok APIs exist.",

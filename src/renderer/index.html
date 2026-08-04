@@ -60,8 +60,16 @@
           <ol
             id="bmlChain"
             class="chain"
-            aria-label="BML skill chain — click a line to run only that skill"
+            aria-label="Main Matt flow — Start runs these in order"
           ></ol>
+          <div class="bml-alts" id="bmlAltsWrap">
+            <p class="bml-alts-label">Alternatives (manual)</p>
+            <div
+              id="bmlAlternates"
+              class="bml-alts-row"
+              aria-label="Alternate skills — click to run one"
+            ></div>
+          </div>
           <div class="bml-footer">
             <p id="bmlCost" class="bml-cost">Est. —</p>
             <p id="bmlStatus" class="bml-status" hidden></p>
@@ -70,7 +78,7 @@
                 type="button"
                 id="bmlRun"
                 class="btn primary"
-                title="Start the BML skill chain for the selected project"
+                title="Start the main Matt flow (grill → spec → tickets → implement → review)"
                 disabled
               >
                 Start

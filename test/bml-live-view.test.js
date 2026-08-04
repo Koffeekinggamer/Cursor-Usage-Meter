@@ -4,16 +4,19 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { renderBmlLive, costLineFromState } = require("../src/lib/bml/live-view");
 const { emptyBmlState } = require("../src/lib/bml/state");
+const { SKILL_CHAIN } = require("../src/lib/bml/skill-chain");
+
+const N = SKILL_CHAIN.length;
 
 describe("renderBmlLive", () => {
-  it("renders title and all 13 chain steps", () => {
+  it("renders title and main-flow chain steps", () => {
     const out = renderBmlLive(emptyBmlState(), { color: false });
     assert.match(out, /BML Process/);
-    assert.match(out, /\/ask-matt/);
+    assert.match(out, /\/grill-with-docs/);
     assert.match(out, /\/implement/);
     assert.match(out, /\/code-review/);
     assert.match(out, /Est\./);
-    assert.match(out, /0\/13/);
+    assert.match(out, new RegExp(`0/${N}`));
   });
 
   it("marks completed steps and active current", () => {
@@ -31,7 +34,7 @@ describe("renderBmlLive", () => {
     };
     const out = renderBmlLive(state, { color: false });
     assert.match(out, /BML: demo/);
-    assert.match(out, /2\/13/);
+    assert.match(out, new RegExp(`2/${N}`));
     assert.match(out, /►/);
     assert.match(out, /✓/);
   });
@@ -43,7 +46,7 @@ describe("renderBmlLive", () => {
       runCost: {
         running: true,
         step: 3,
-        total: 13,
+        total: N,
         startedAt: Date.now() - 90_000,
         elapsedMs: 90_000,
         tokensIn: 10_000,
@@ -54,7 +57,7 @@ describe("renderBmlLive", () => {
     };
     const out = renderBmlLive(state, { color: false, now: Date.now() });
     assert.match(out, /running/);
-    assert.match(out, /3\/13/);
+    assert.match(out, new RegExp(`3/${N}`));
     assert.match(out, /Elapsed/i);
   });
 
@@ -64,8 +67,8 @@ describe("renderBmlLive", () => {
       lastPrompt: {
         at: "2026-01-01T00:00:00.000Z",
         stepIndex: 0,
-        command: "/ask-matt",
-        label: "Ask Matt",
+        command: "/grill-with-docs",
+        label: "Grill",
         charCount: 42,
         preview: "short preview",
         path: "/tmp/bml-prompt-latest.txt",
@@ -73,10 +76,10 @@ describe("renderBmlLive", () => {
     };
     const out = renderBmlLive(state, {
       color: false,
-      promptText: "=== BML prompt ===\n/ask-matt\nhello admin job",
+      promptText: "=== BML prompt ===\n/grill-with-docs\nhello admin job",
     });
     assert.match(out, /Live prompt/);
-    assert.match(out, /ask-matt/);
+    assert.match(out, /grill-with-docs/);
     assert.match(out, /hello admin job/);
   });
 });

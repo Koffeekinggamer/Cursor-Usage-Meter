@@ -3,9 +3,10 @@
 /**
  * Build-column skill chain for the BML coach.
  *
- * Main Matt flow (idea → ship) plus admin on-ramps so any job can enter:
- * triage / bugs / research / architecture / design / prototype, then
- * grill → to-spec → to-tickets → implement (tdd + code-review inside).
+ * Main Matt flow (aihero.dev idea → ship) — what Start auto-runs:
+ *   grill-with-docs → to-spec → to-tickets → implement → code-review
+ *
+ * Alternates (router / on-ramps / standalone) are click-only — never in Start.
  *
  * Inject prompts load the real installed SKILL.md from the Matt pack
  * (project-local Cursor skills or compatible Matt-pack fallbacks).
@@ -30,9 +31,62 @@ const {
  * }} SkillStep
  */
 
-/** @type {readonly SkillStep[]} */
+/** Training main flow — Start auto-runs only these. @type {readonly SkillStep[]} */
 const SKILL_CHAIN = Object.freeze([
-  // —— Router ——
+  {
+    id: "grill",
+    command: "/grill-with-docs",
+    skill: "grill-with-docs",
+    label: "Grill",
+    role: "Relentless interview + CONTEXT.md / ADRs",
+    required: true,
+    optional: false,
+    phase: "build",
+  },
+  {
+    id: "to-spec",
+    command: "/to-spec",
+    skill: "to-spec",
+    label: "Spec",
+    role: "Synthesize conversation → PRD/spec on tracker",
+    required: true,
+    optional: false,
+    phase: "build",
+  },
+  {
+    id: "to-tickets",
+    command: "/to-tickets",
+    skill: "to-tickets",
+    label: "Tickets",
+    role: "Tracer-bullet vertical slices with blockers",
+    required: true,
+    optional: false,
+    phase: "build",
+  },
+  {
+    id: "implement",
+    command: "/implement",
+    skill: "implement",
+    label: "Implement",
+    role: "Build with /tdd at seams; /code-review; commit",
+    required: true,
+    optional: false,
+    phase: "build",
+  },
+  {
+    id: "code-review",
+    command: "/code-review",
+    skill: "code-review",
+    label: "Review",
+    role: "Standards + Spec review of the diff",
+    required: true,
+    optional: false,
+    phase: "close",
+  },
+]);
+
+/** Router / on-ramps / standalone — manual one-shots only. @type {readonly SkillStep[]} */
+const SKILL_ALTERNATES = Object.freeze([
   {
     id: "ask-matt",
     command: "/ask-matt",
@@ -43,7 +97,6 @@ const SKILL_CHAIN = Object.freeze([
     optional: true,
     phase: "route",
   },
-  // —— On-ramps (any job) ——
   {
     id: "triage",
     command: "/triage",
@@ -113,58 +166,6 @@ const SKILL_CHAIN = Object.freeze([
     required: false,
     optional: true,
     phase: "on-ramp",
-  },
-  // —— Main Build flow (required unless tiny) ——
-  {
-    id: "grill",
-    command: "/grill-with-docs",
-    skill: "grill-with-docs",
-    label: "Grill",
-    role: "Relentless interview + CONTEXT.md / ADRs",
-    required: true,
-    optional: false,
-    phase: "build",
-  },
-  {
-    id: "to-spec",
-    command: "/to-spec",
-    skill: "to-spec",
-    label: "Spec",
-    role: "Synthesize conversation → PRD/spec on tracker",
-    required: true,
-    optional: false,
-    phase: "build",
-  },
-  {
-    id: "to-tickets",
-    command: "/to-tickets",
-    skill: "to-tickets",
-    label: "Tickets",
-    role: "Tracer-bullet vertical slices with blockers",
-    required: true,
-    optional: false,
-    phase: "build",
-  },
-  {
-    id: "implement",
-    command: "/implement",
-    skill: "implement",
-    label: "Implement",
-    role: "Build with /tdd at seams; /code-review; commit",
-    required: true,
-    optional: false,
-    phase: "build",
-  },
-  // —— Close ——
-  {
-    id: "code-review",
-    command: "/code-review",
-    skill: "code-review",
-    label: "Review",
-    role: "Standards + Spec review of the diff",
-    required: false,
-    optional: true,
-    phase: "close",
   },
 ]);
 
@@ -502,8 +503,48 @@ function resolveChainForView(opts = {}) {
   });
 }
 
+/**
+ * Enrich alternates for UI (manual one-shots).
+ * @param {{ loadSkill?: typeof loadSkillForCommand }} [opts]
+ */
+function resolveAlternatesForView(opts = {}) {
+  const load = opts.loadSkill || loadSkillForCommand;
+  return SKILL_ALTERNATES.map((s) => {
+    const loaded = load(s.skill || s.id);
+    return {
+      ...s,
+      skillPath: loaded.path,
+      skillOk: loaded.ok,
+      skillName: loaded.name,
+    };
+  });
+}
+
+/**
+ * Find a skill in main chain or alternates by id or slash command.
+ * @param {string|null|undefined} idOrCommand
+ * @returns {SkillStep|null}
+ */
+function findSkillById(idOrCommand) {
+  const raw = String(idOrCommand || "").trim();
+  if (!raw) return null;
+  const key = raw.replace(/^\//, "").toLowerCase();
+  const match = (s) =>
+    s.id === raw ||
+    s.command === raw ||
+    s.id === key ||
+    s.skill === key ||
+    s.command.replace(/^\//, "").toLowerCase() === key;
+  return (
+    SKILL_CHAIN.find(match) ||
+    SKILL_ALTERNATES.find(match) ||
+    null
+  );
+}
+
 module.exports = {
   SKILL_CHAIN,
+  SKILL_ALTERNATES,
   EST_SEC_PER_SKILL,
   EST_TOKENS_PER_SKILL,
   stepAt,
@@ -514,6 +555,8 @@ module.exports = {
   isMeasureAllowedCommand,
   buildMeasureInstrumentPrompt,
   resolveChainForView,
+  resolveAlternatesForView,
+  findSkillById,
   contextLines,
   estimateChainCost,
   formatCostEstimate,

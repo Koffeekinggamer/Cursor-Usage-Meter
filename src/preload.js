@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("tokenMeter", {
     advanceStage: (payload) => ipcRenderer.invoke("bml:advanceStage", payload || {}),
     runSkillStep: () => ipcRenderer.invoke("bml:runSkillStep"),
     runOneSkillStep: (index) => ipcRenderer.invoke("bml:runOneSkillStep", index),
+    runAlternateSkill: (idOrCommand) =>
+      ipcRenderer.invoke("bml:runAlternateSkill", idOrCommand),
     confirmInjectedStep: (payload) =>
       ipcRenderer.invoke("bml:confirmInjectedStep", payload || {}),
     cancel: () => ipcRenderer.invoke("bml:cancel"),

@@ -126,7 +126,7 @@ function applyBml(view) {
     bmlRun.textContent = running ? "Starting…" : "Start";
     bmlRun.title = !hasProject
       ? "Select a project above, then Start"
-      : "Start the BML skill chain for the selected project";
+      : "Start the main Matt flow (grill → spec → tickets → implement → review)";
   }
   if (bmlStatus) {
     // Hide clipboard fluff; show live auto-continue / error status.
@@ -161,6 +161,20 @@ function applyBml(view) {
       if (step.done) li.classList.add("done");
       if (bmlBusy || awaiting) li.setAttribute("aria-disabled", "true");
       bmlChain.appendChild(li);
+    });
+  }
+  const bmlAlternates = document.getElementById("bmlAlternates");
+  if (bmlAlternates) {
+    bmlAlternates.innerHTML = "";
+    (view.skillAlternates || []).forEach((step) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn ghost bml-alt-btn";
+      btn.textContent = step.command || step.label || "";
+      btn.title = step.role || "Run this skill once (not part of Start)";
+      btn.dataset.skillId = step.id || "";
+      btn.disabled = Boolean(bmlBusy || awaiting || !hasProject);
+      bmlAlternates.appendChild(btn);
     });
   }
   if (bmlCost) {
@@ -330,6 +344,17 @@ document.getElementById("bmlProjectSelect")?.addEventListener("change", async (e
 bmlChain?.addEventListener("click", (e) => {
   const li = e.target?.closest?.("li[data-step-index]");
   if (li && li.getAttribute("aria-disabled") !== "true") runSingleSkill(Number(li.dataset.stepIndex));
+});
+document.getElementById("bmlAlternates")?.addEventListener("click", async (e) => {
+  const btn = e.target?.closest?.("button[data-skill-id]");
+  if (!btn || btn.disabled) return;
+  if (bmlBusy) return;
+  bmlBusy = true;
+  try {
+    applyBml(await bmlApi()?.runAlternateSkill(btn.dataset.skillId));
+  } finally {
+    bmlBusy = false;
+  }
 });
 document.getElementById("bmlRun")?.addEventListener("click", async () => {
   if (bmlBusy) return;

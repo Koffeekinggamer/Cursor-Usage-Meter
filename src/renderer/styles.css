@@ -295,6 +295,39 @@ body.bml-open {
   cursor: wait;
 }
 
+.bml-alts {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 2px 2px;
+  border-top: 1px solid rgba(28, 25, 23, 0.08);
+}
+
+.bml-alts-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #78716c;
+}
+
+.bml-alts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 72px;
+  overflow-y: auto;
+}
+
+.bml-alt-btn {
+  font-size: 10px !important;
+  padding: 3px 7px !important;
+  border-radius: 6px !important;
+  white-space: nowrap;
+}
+
 .bml-footer {
   flex: 0 0 auto;
   display: flex;

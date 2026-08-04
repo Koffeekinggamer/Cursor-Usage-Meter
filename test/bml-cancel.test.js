@@ -33,7 +33,7 @@ describe("BML cancel", () => {
     coach.setSelectedProject(proj);
     const view = await coach.runAllSkillSteps();
     assert.ok(injects >= 1);
-    assert.ok(injects < 13, `expected early stop, got ${injects} injects`);
+    assert.ok(injects < 6, `expected early stop, got ${injects} injects`);
     assert.equal(view.runCost.running, false);
     assert.equal(view.buildStepIndex, 0, "strikethroughs cleared");
     assert.equal(view.runCost.elapsedMs, 0);

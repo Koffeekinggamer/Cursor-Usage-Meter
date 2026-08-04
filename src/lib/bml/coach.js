@@ -15,6 +15,7 @@ const {
 } = require("./state");
 const {
   SKILL_CHAIN,
+  SKILL_ALTERNATES,
   stepAt,
   nextStepIndex,
   canSkipStep,
@@ -23,6 +24,8 @@ const {
   isMeasureAllowedCommand,
   buildMeasureInstrumentPrompt,
   resolveChainForView,
+  resolveAlternatesForView,
+  findSkillById,
   estimateChainCost,
   formatCostEstimate,
   formatDuration,
@@ -357,6 +360,7 @@ function createBmlCoach(opts = {}) {
       : { ok: false, errors: ["Already Done."] };
 
     const chain = resolveChainForView();
+    const alternates = resolveAlternatesForView();
     const pre = estimateChainCost({ fromIndex: 0 });
     const rc = state.runCost || {};
     // Wall-clock for the whole run (live from startedAt, not per-skill)
@@ -390,6 +394,11 @@ function createBmlCoach(opts = {}) {
           i === state.buildStepIndex &&
           state.buildStepIndex < SKILL_CHAIN.length,
         done: i < state.buildStepIndex,
+      })),
+      skillAlternates: alternates.map((s) => ({
+        ...s,
+        active: false,
+        done: false,
       })),
       currentStep: step
         ? {
@@ -777,9 +786,18 @@ function createBmlCoach(opts = {}) {
     /**
      * Run a single skill at `index` (defaults to current buildStepIndex).
      * @param {number} [index]
-     * @param {{ trackCost?: boolean, onProgress?: (view: object) => void, continueChain?: boolean }} [opts]
+     * @param {{
+     *   trackCost?: boolean,
+     *   onProgress?: (view: object) => void,
+     *   continueChain?: boolean,
+     *   step?: import('./skill-chain').SkillStep|null,
+     *   preserveMainIndex?: boolean,
+     *   alternate?: boolean,
+     * }} [opts]
      */
     async runSkillStep(index, opts = {}) {
+      const preserveMainIndex = Boolean(opts.preserveMainIndex || opts.alternate);
+      const stepOverride = opts.step || null;
       const i =
         Number.isInteger(index) && index >= 0
           ? index
@@ -792,19 +810,22 @@ function createBmlCoach(opts = {}) {
       const solo = !state.runCost?.running && trackCost;
       if (solo) cancelRequested = false;
       const startedAt = solo ? Date.now() : state.runCost?.startedAt || Date.now();
+      const savedIndex = state.buildStepIndex;
 
       if (cancelRequested) {
         return getView();
       }
 
-      dispatch({ type: "build/step", index: i });
+      if (!preserveMainIndex) {
+        dispatch({ type: "build/step", index: i });
+      }
       if (solo) {
         dispatch({
           type: "run/cost",
           patch: {
             running: true,
-            step: i + 1,
-            total: SKILL_CHAIN.length,
+            step: preserveMainIndex ? 1 : i + 1,
+            total: preserveMainIndex ? 1 : SKILL_CHAIN.length,
             startedAt,
             elapsedMs: 0,
             tokensIn: 0,
@@ -833,14 +854,31 @@ function createBmlCoach(opts = {}) {
         .filter(Boolean)
         .join(" — ");
 
-      const step = stepAt(i) || stepAt(0);
-      const chainPos = `Chain step ${i + 1}/${SKILL_CHAIN.length}: ${step?.command || "?"}`;
+      const step = stepOverride || stepAt(i) || stepAt(0);
+      const chainPos = preserveMainIndex
+        ? `Alternate (manual): ${step?.command || "?"}`
+        : `Chain step ${i + 1}/${SKILL_CHAIN.length}: ${step?.command || "?"}`;
+      const runExtra = preserveMainIndex
+        ? [
+            chainPos,
+            "You are running a single alternate Matt skill (not the Start main flow).",
+            "Complete THIS skill fully before stopping. Do not start the main grill→spec→tickets chain unless the user asks.",
+            "Act with full authority to finish the work; prefer decisive implementation over asking permission.",
+            "Use Cursor Auto; choose skill depth for the detected app profile only.",
+          ].join("\n")
+        : [
+            chainPos,
+            "You are one step in an admin carte-blanche BML skill run. Complete THIS skill fully before stopping.",
+            "Do not skip ahead to later chain steps — the coach will invoke those next when auto-running.",
+            "Act with full authority to finish the work; prefer decisive implementation over asking permission.",
+            "Use Cursor Auto; choose skill depth for the detected app profile only.",
+          ].join("\n");
 
       try {
         if (cancelRequested) {
           return finishSolo({ cancelled: true });
         }
-        if (state.stage === "Measure") {
+        if (state.stage === "Measure" && !preserveMainIndex) {
           const cmd = step?.command || "/implement";
           if (!isMeasureAllowedCommand(cmd) && !state.tinyBuild) {
             const built = buildMeasureInstrumentPrompt({
@@ -881,13 +919,7 @@ function createBmlCoach(opts = {}) {
           cwd: preferCwd,
           projectBlock,
           appProfile: project.appProfile || null,
-          extra: [
-            chainPos,
-            "You are one step in an admin carte-blanche BML skill run. Complete THIS skill fully before stopping.",
-            "Do not skip ahead to later chain steps — the coach will invoke those next when auto-running.",
-            "Act with full authority to finish the work; prefer decisive implementation over asking permission.",
-            "Use Cursor Auto; choose skill depth for the detected app profile only.",
-          ].join("\n"),
+          extra: runExtra,
         });
         if (!built.skillOk) {
           dispatch({
@@ -905,10 +937,10 @@ function createBmlCoach(opts = {}) {
           skillOk: built.skillOk,
           preferCwd,
           chainPos,
-          stepIndex: i,
+          stepIndex: preserveMainIndex ? savedIndex : i,
           command: step?.command,
           label: step?.label,
-          continueChain,
+          continueChain: false,
         });
       } catch (err) {
         if (!cancelRequested) {
@@ -921,6 +953,7 @@ function createBmlCoach(opts = {}) {
 
       if (
         solo &&
+        !preserveMainIndex &&
         state.lastInject?.ok &&
         state.lastInject?.needsConfirm &&
         wantAutoContinue(process.env) &&
@@ -955,6 +988,9 @@ function createBmlCoach(opts = {}) {
           if (cancelled) {
             // Full reset: no strikethroughs, no timers, clean process
             dispatch({ type: "run/reset" });
+            if (preserveMainIndex) {
+              dispatch({ type: "build/step", index: savedIndex });
+            }
           } else {
             const durationMs = Date.now() - startedAt;
             const inTok = estimateTokensFromText(
@@ -964,8 +1000,8 @@ function createBmlCoach(opts = {}) {
               type: "run/cost",
               patch: {
                 running: false,
-                step: i + 1,
-                total: SKILL_CHAIN.length,
+                step: preserveMainIndex ? 1 : i + 1,
+                total: preserveMainIndex ? 1 : SKILL_CHAIN.length,
                 startedAt: null,
                 elapsedMs: durationMs,
                 tokensIn: inTok,
@@ -974,9 +1010,15 @@ function createBmlCoach(opts = {}) {
                 lastTokensEst: inTok + Math.round(EST_TOKENS_PER_SKILL * 0.55),
               },
             });
-            if (state.lastInject?.ok && !state.lastInject?.needsConfirm) {
+            if (
+              !preserveMainIndex &&
+              state.lastInject?.ok &&
+              !state.lastInject?.needsConfirm
+            ) {
               // Mark this skill done only when inject actually finished work
               dispatch({ type: "build/step", index: i + 1 });
+            } else if (preserveMainIndex) {
+              dispatch({ type: "build/step", index: savedIndex });
             }
           }
           cancelRequested = false;
@@ -987,8 +1029,37 @@ function createBmlCoach(opts = {}) {
     },
 
     /**
-     * Bind active chat project as experiment, then auto-run every Matt skill
-     * in order (1…N). Publishes progress via onProgress after each step.
+     * Run one alternate skill (router / on-ramp / standalone). Does not advance
+     * the Start main-flow buildStepIndex.
+     * @param {string} idOrCommand
+     * @param {{ onProgress?: (view: object) => void }} [opts]
+     */
+    async runAlternateSkill(idOrCommand, opts = {}) {
+      const step = findSkillById(idOrCommand);
+      const isAlt =
+        step &&
+        SKILL_ALTERNATES.some(
+          (a) => a.id === step.id || a.command === step.command
+        );
+      if (!isAlt || !step) {
+        return dispatch({
+          type: "error",
+          message: `Unknown alternate skill: ${idOrCommand || "(empty)"}`,
+        });
+      }
+      return this.runSkillStep(state.buildStepIndex, {
+        trackCost: true,
+        onProgress: opts.onProgress,
+        continueChain: false,
+        step,
+        preserveMainIndex: true,
+        alternate: true,
+      });
+    },
+
+    /**
+     * Bind selected project as experiment, then auto-run the main Matt flow
+     * (grill → to-spec → to-tickets → implement → code-review).
      * @param {{ onProgress?: (view: object) => void }} [opts]
      */
     async runAllSkillSteps(opts = {}) {
@@ -1059,7 +1130,7 @@ function createBmlCoach(opts = {}) {
         type: "inject/result",
         ok: true,
         method: "chain",
-        detail: `Auto-running all ${SKILL_CHAIN.length} Matt skills on ${project.name || project.cwd}…`,
+        detail: `Auto-running main Matt flow (${SKILL_CHAIN.length} steps) on ${project.name || project.cwd}…`,
       });
       if (onProgress) onProgress(getView());
 

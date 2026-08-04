@@ -226,6 +226,13 @@ function registerBmlIpc() {
   });
   ipcMain.handle("bml:runSkillStep", async () => { const v = await bmlCoach.runAllSkillSteps({ onProgress: publishBml }); publishBml(v); return v; });
   ipcMain.handle("bml:runOneSkillStep", async (_e, index) => { const v = await bmlCoach.runSkillStep(index, { trackCost: true, onProgress: publishBml, continueChain: false }); publishBml(v); return v; });
+  ipcMain.handle("bml:runAlternateSkill", async (_e, idOrCommand) => {
+    const v = await bmlCoach.runAlternateSkill(idOrCommand, {
+      onProgress: publishBml,
+    });
+    publishBml(v);
+    return v;
+  });
   ipcMain.handle("bml:confirmInjectedStep", async (_e, payload) => {
     const v = await bmlCoach.confirmInjectedStep({
       continueChain: payload?.continueChain !== false,

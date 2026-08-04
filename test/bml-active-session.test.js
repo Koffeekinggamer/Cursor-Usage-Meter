@@ -91,6 +91,7 @@ describe("Cursor workspace resolution", () => {
         projectName: "faf-pricelist-2.0",
         kind: "cloud",
       }),
+      resolveHotChat: () => null,
       listWorkspaces: () => [
         { cwd: "/Users/me/Cursor Usage Meter", mtimeMs: 999 },
       ],
@@ -100,10 +101,38 @@ describe("Cursor workspace resolution", () => {
     assert.equal(session.agentId, "bc-abc");
   });
 
+  it("prefers hot open chat over stale selectedAgent", () => {
+    const session = resolveChatSession({
+      env: {},
+      resolveGlass: () => ({
+        session_id: "bc-stale",
+        cwd: "/Users/me/faf",
+        live: true,
+        source: "glass_selected_cloud",
+        agentId: "bc-stale",
+        kind: "cloud",
+      }),
+      resolveHotChat: () => ({
+        session_id: "agent-live",
+        cwd: "/Users/me/Cursor-Usage-Meter",
+        live: true,
+        source: "open_chat_local",
+        agentId: "agent-live",
+        kind: "local",
+        mtimeMs: Date.now(),
+      }),
+      listWorkspaces: () => [],
+    });
+    assert.equal(session.cwd, "/Users/me/Cursor-Usage-Meter");
+    assert.equal(session.agentId, "agent-live");
+    assert.equal(session.source, "open_chat_local");
+  });
+
   it("returns the newest Cursor workspace when no override exists", () => {
     const session = resolveChatSession({
       env: {},
       resolveGlass: () => null,
+      resolveHotChat: () => null,
       listWorkspaces: () => [{ cwd: "/Users/me/target", mtimeMs: 1 }],
     });
     assert.equal(session.cwd, "/Users/me/target");
@@ -115,6 +144,11 @@ describe("Cursor workspace resolution", () => {
       CUM_METER_ROOT: "/Users/me/Cursor Usage Meter",
     });
     assert.ok(roots.has(path.resolve("/Users/me/Cursor Usage Meter")));
+    assert.ok(
+      roots.has(
+        path.resolve(path.join(require("os").homedir(), "Developer", "Cursor-Usage-Meter"))
+      )
+    );
   });
 });
 

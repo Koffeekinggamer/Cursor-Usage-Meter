@@ -12,6 +12,8 @@ const projectContext = require("./project-context");
 const liveView = require("./live-view");
 const promptLog = require("./prompt-log");
 const appProfile = require("./app-profile");
+const openChats = require("./open-chats");
+const glassSession = require("./glass-session");
 
 module.exports = {
   ...template,
@@ -26,4 +28,6 @@ module.exports = {
   ...liveView,
   ...promptLog,
   ...appProfile,
+  ...openChats,
+  ...glassSession,
 };

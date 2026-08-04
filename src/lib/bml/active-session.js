@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 const { getCursorUserDataDir } = require("../paths");
 const { resolveGlassSelectedSession } = require("./glass-session");
+const { resolveHotOpenChatSession } = require("./open-chats");
 
 /**
  * Decode a file URI from Cursor's workspace storage.
@@ -83,8 +84,12 @@ function meterSelfRoots(env = process.env) {
   };
   add(env.CUM_METER_ROOT);
   add(env.CUM_APP_ROOT);
-  // Common install / checkout names
-  add(path.join(os.homedir(), "Cursor Usage Meter"));
+  const home = os.homedir();
+  // Common install / checkout names — never treat Meter itself as "the job"
+  add(path.join(home, "Cursor Usage Meter"));
+  add(path.join(home, "Developer", "Cursor-Usage-Meter"));
+  add(path.join(home, ".cursor", "CURSOR USAGE METER"));
+  add(path.join(home, "Developer", "Token-Usage-Meter"));
   try {
     add(path.join(__dirname, "..", "..", ".."));
   } catch {
@@ -154,18 +159,23 @@ function listCursorWorkspaces(opts = {}) {
 }
 
 /**
- * Resolve the Cursor project for the focused Agent / open task.
- * Priority: env override → Glass selectedAgent → hottest non-Meter workspaceStorage.
+ * Resolve the Cursor project for the focused / open Agent chat.
+ * Priority: env override → hottest open-chat transcript → Glass selectedAgent
+ * → hottest non-Meter workspaceStorage.
+ * Open-chat transcripts keep BML live per chat even when selectedAgent lags
+ * or still points at another Agent (e.g. a cloud task).
  * @param {{
  *   env?: NodeJS.ProcessEnv,
  *   preferCwd?: string|null,
  *   listWorkspaces?: typeof listCursorWorkspaces,
  *   resolveGlass?: typeof resolveGlassSelectedSession,
+ *   resolveHotChat?: typeof resolveHotOpenChatSession,
  *   home?: string,
  * }} [opts]
  */
 function resolveChatSession(opts = {}) {
   const env = opts.env ?? process.env;
+  const home = opts.home ?? os.homedir();
   const cwd =
     opts.preferCwd ||
     env.CUM_BML_CWD ||
@@ -182,30 +192,63 @@ function resolveChatSession(opts = {}) {
   }
 
   const resolveGlass = opts.resolveGlass || resolveGlassSelectedSession;
+  /** @type {Awaited<ReturnType<typeof resolveGlassSelectedSession>>} */
+  let glass = null;
   try {
-    const glass = resolveGlass({
-      env,
-      home: opts.home ?? os.homedir(),
+    glass = resolveGlass({ env, home });
+  } catch {
+    glass = null;
+  }
+
+  const resolveHot = opts.resolveHotChat || resolveHotOpenChatSession;
+  try {
+    const hot = resolveHot({
+      home,
+      preferAgentId: glass?.agentId || null,
     });
-    if (glass?.cwd) {
-      return {
-        session_id: glass.session_id || glass.agentId || "glass-agent",
-        cwd: glass.cwd,
-        live: true,
-        source: glass.source || "glass_selected",
-        agentId: glass.agentId,
-        projectName: glass.projectName || null,
-        repoUrl: glass.repoUrl || null,
-        kind: glass.kind,
-      };
+    if (hot?.cwd) {
+      // Prefer a hotter open chat over a stale selectedAgent (different agent).
+      const glassId = glass?.agentId ? String(glass.agentId) : null;
+      const hotId = hot.agentId ? String(hot.agentId) : null;
+      const sameAgent = Boolean(glassId && hotId && glassId === hotId);
+      const hotIsFresher =
+        !glassId ||
+        sameAgent ||
+        (typeof hot.mtimeMs === "number" &&
+          Date.now() - hot.mtimeMs < 15 * 60 * 1000);
+      if (hotIsFresher) {
+        return {
+          session_id: hot.session_id || hot.agentId || "open-chat",
+          cwd: hot.cwd,
+          live: true,
+          source: hot.source || "open_chat",
+          agentId: hot.agentId,
+          projectName: hot.projectName || null,
+          repoUrl: hot.repoUrl || null,
+          kind: hot.kind,
+        };
+      }
     }
   } catch {
-    // fall through to workspaceStorage
+    // fall through to glass / workspaceStorage
+  }
+
+  if (glass?.cwd) {
+    return {
+      session_id: glass.session_id || glass.agentId || "glass-agent",
+      cwd: glass.cwd,
+      live: true,
+      source: glass.source || "glass_selected",
+      agentId: glass.agentId,
+      projectName: glass.projectName || null,
+      repoUrl: glass.repoUrl || null,
+      kind: glass.kind,
+    };
   }
 
   const workspace = (opts.listWorkspaces || listCursorWorkspaces)({
     env,
-    home: opts.home,
+    home,
   })[0];
   if (!workspace) return null;
   return {

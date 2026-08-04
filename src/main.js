@@ -15,6 +15,10 @@ const {
 } = require("./lib/pidfile");
 const { nextDragPosition } = require("./lib/drag-position");
 const { createBmlCoach } = require("./lib/bml/coach");
+const {
+  evaluateFaceDiag,
+  syntheticVerifyReading,
+} = require("./lib/selftest-checks");
 
 const POLL_MS = Number(process.env.CUM_POLL_MS) || 60_000;
 const OVERLAY_ASSERT_MS = Number(process.env.CUM_OVERLAY_MS) || 5_000;
@@ -25,8 +29,9 @@ const pidFile = defaultPidPath(ROOT);
 const COLLAPSED = { width: 200, height: 200 };
 /** Dial (200) + BML panel (~360) + padding */
 const EXPANDED = { width: 600, height: 580 };
+const isSelfTest = process.env.CUM_SELFTEST === "1";
 
-const gotSingletonLock = app.requestSingleInstanceLock();
+const gotSingletonLock = isSelfTest || app.requestSingleInstanceLock();
 if (!gotSingletonLock) {
   app.quit();
 }
@@ -260,31 +265,115 @@ function startOverlayAssert() {
 }
 
 /**
- * Watch Cursor workspace switches for BML only.
- * Does not touch usage/token polling — Meter keep counting as usual.
+ * Watch open Cursor Agent chats for BML only.
+ * Rebinds when the live chat / Agent changes — independent of usage polling.
  */
 function startBmlProjectWatch() {
   if (bmlProjectTimer) clearInterval(bmlProjectTimer);
   bmlProjectTimer = setInterval(async () => {
     if (!bmlCoach || !mainWindow || mainWindow.isDestroyed()) return;
     try {
-      const before = bmlCoach.getView()?.boundCwd || null;
+      const before = bmlCoach.getView();
+      const beforeKey = `${before?.boundCwd || ""}::${before?.boundAgentId || ""}`;
       const { changed } = bmlCoach.syncActiveProject();
       if (!changed) return;
       const after = bmlCoach.getView();
+      const afterKey = `${after?.boundCwd || ""}::${after?.boundAgentId || ""}`;
       publishBml(after);
-      // If BML panel is open, auto-process the new project instance.
+      // If BML panel is open, auto-process the new chat instance.
       if (after.panelOpen) {
         const view = await bmlCoach.runAllSkillSteps({ onProgress: publishBml });
         publishBml(view);
-      } else if (before && after.boundCwd && before !== after.boundCwd) {
-        // Panel closed: still rebind quietly so next activate uses the new app.
+      } else if (beforeKey !== afterKey) {
+        // Panel closed: still rebind quietly so next activate uses the open chat.
         publishBml(bmlCoach.getView());
       }
     } catch {
       // never interrupt the Meter overlay
     }
   }, BML_PROJECT_MS);
+}
+
+/**
+ * Production self-test: capture page + renderer diagnostics, write under tmp/, exit.
+ * Run: CUM_SELFTEST=1 npm start
+ */
+async function runSelfTest() {
+  const fs = require("fs");
+  const outDir = path.join(ROOT, "tmp");
+  fs.mkdirSync(outDir, { recursive: true });
+  const shotPath = path.join(outDir, "meter-selftest.png");
+  const logPath = path.join(outDir, "meter-selftest.json");
+
+  // Ensure Face is non-idle even if live usage-summary is down.
+  if (!meterState.reading) {
+    meterState = reduceMeterState(meterState, {
+      ok: true,
+      reading: syntheticVerifyReading(),
+    });
+    publishFace();
+  }
+
+  await new Promise((r) => setTimeout(r, 2000));
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    console.error("SELFTEST FAIL: no window");
+    app.exit(1);
+    return;
+  }
+
+  const diag = await mainWindow.webContents.executeJavaScript(`
+    (() => {
+      const canvas = document.getElementById("gauge");
+      const ctx = canvas && canvas.getContext("2d");
+      let nonCream = 0, total = 0, sample = null;
+      if (ctx && canvas) {
+        const w = canvas.width, h = canvas.height;
+        const d = ctx.getImageData(0, 0, w, h).data;
+        for (let y = 0; y < h; y += Math.max(1, Math.floor(h / 40))) {
+          for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 40))) {
+            const i = (y * w + x) * 4;
+            total++;
+            const r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
+            const isCream = a > 200 && r > 175 && g > 165 && b > 145 && Math.abs(r - g) < 40;
+            if (a > 100 && !isCream) nonCream++;
+          }
+        }
+        const ci = (Math.floor(h/2) * w + Math.floor(w/2)) * 4;
+        sample = { r: d[ci], g: d[ci+1], b: d[ci+2], a: d[ci+3], w, h };
+      }
+      return {
+        hasTokenMeter: !!window.tokenMeter,
+        hasMeterPaint: typeof globalThis.MeterPaint?.drawMeterFace === "function",
+        cursorText: document.getElementById("cursorPct")?.textContent,
+        otherText: document.getElementById("otherPct")?.textContent,
+        planText: document.getElementById("plan")?.textContent,
+        canvasW: canvas?.width || 0,
+        canvasH: canvas?.height || 0,
+        nonCream, total, sample,
+      };
+    })()
+  `);
+
+  const img = await mainWindow.webContents.capturePage();
+  fs.writeFileSync(shotPath, img.toPNG());
+  const verdict = evaluateFaceDiag(diag);
+  const report = {
+    ok: verdict.ok,
+    failures: verdict.failures,
+    diag,
+    shotPath,
+    face: currentFace(),
+  };
+  fs.writeFileSync(logPath, JSON.stringify(report, null, 2));
+  console.log("SELFTEST REPORT", JSON.stringify(report, null, 2));
+
+  if (verdict.ok) {
+    console.log("SELFTEST PASS");
+    app.exit(0);
+  } else {
+    console.error("SELFTEST FAIL:", verdict.failures.join("; "));
+    app.exit(1);
+  }
 }
 
 app.whenReady().then(() => {
@@ -300,11 +389,28 @@ app.whenReady().then(() => {
 
   bmlCoach = createBmlCoach({ appData: app.getPath("userData") });
   bmlCoach.syncActiveProject({ force: true });
-  claimMeterSingleton(ROOT, process.pid);
+  if (!isSelfTest) {
+    claimMeterSingleton(ROOT, process.pid);
+  }
   registerBmlIpc();
   createWindow();
   startPolling();
   startOverlayAssert();
+
+  if (isSelfTest) {
+    mainWindow?.webContents?.on(
+      "console-message",
+      (_e, level, message, line, sourceId) => {
+        console.log(`RENDERER[${level}] ${message} (${sourceId}:${line})`);
+      }
+    );
+    runSelfTest().catch((err) => {
+      console.error("SELFTEST ERROR", err);
+      app.exit(1);
+    });
+    return;
+  }
+
   startBmlProjectWatch();
 
   app.on("second-instance", () => {

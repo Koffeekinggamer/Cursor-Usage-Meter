@@ -11,7 +11,9 @@
     "uninstall-autolaunch": "node scripts/uninstall-autolaunch.js",
     "watch-cursor": "node scripts/watch-cursor.js",
     "bml-live": "node scripts/bml-live.js",
-    "bml-run-auto": "node scripts/bml-run-auto.js"
+    "bml-run-auto": "node scripts/bml-run-auto.js",
+    "verify-meter-ui": "env -u ELECTRON_RUN_AS_NODE electron scripts/verify-meter-ui.js",
+    "selftest": "CUM_SELFTEST=1 env -u ELECTRON_RUN_AS_NODE electron ."
   },
   "engines": {
     "node": ">=18"

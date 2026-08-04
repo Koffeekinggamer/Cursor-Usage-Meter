@@ -68,6 +68,7 @@ function createBmlCoach(opts = {}) {
   let cancelRequested = false;
   /** Last Cursor workspace cwd BML is bound to (null until first sync). */
   let boundCwd = null;
+  let boundAgentId = null;
 
   function persist() {
     try {
@@ -87,7 +88,7 @@ function createBmlCoach(opts = {}) {
   }
 
   /**
-   * Rebind BML to the Cursor workspace currently open.
+   * Rebind BML to the open Cursor Agent chat (per chat, not Meter-only).
    * Usage/token polling is independent — this only updates coach state.
    * @param {{ force?: boolean }} [opts]
    * @returns {{ changed: boolean, project: import('./project-context').ProjectContext|null }}
@@ -101,10 +102,18 @@ function createBmlCoach(opts = {}) {
       project = null;
     }
     const cwd = normalizeCwd(project?.cwd);
-    const changed = Boolean(cwd && cwd !== boundCwd);
+    const agentId =
+      project?.sessionId && project.sessionId !== "cursor-workspace"
+        ? String(project.sessionId)
+        : null;
+    const changed = Boolean(
+      (cwd && cwd !== boundCwd) ||
+        (agentId && agentId !== boundAgentId) ||
+        (!agentId && boundAgentId && cwd && cwd !== boundCwd)
+    );
 
     if (changed || (force && cwd && !boundCwd)) {
-      if (changed && boundCwd) {
+      if (changed && (boundCwd || boundAgentId)) {
         cancelRequested = true;
         try {
           abortActiveInject();
@@ -124,6 +133,7 @@ function createBmlCoach(opts = {}) {
         persist();
       }
       boundCwd = cwd;
+      boundAgentId = agentId;
     }
 
     if (cwd) {
@@ -385,6 +395,7 @@ function createBmlCoach(opts = {}) {
           }
         : null,
       boundCwd,
+      boundAgentId,
     };
   }
 
@@ -419,7 +430,7 @@ function createBmlCoach(opts = {}) {
     syncActiveProject,
 
     /**
-     * Open/close BML. Opening rebinds to the active Cursor project and starts
+     * Open/close BML. Opening rebinds to the live open Agent chat and starts
      * processing that instance (copy next skill) without touching usage polling.
      * @param {boolean} open
      * @param {{
@@ -432,6 +443,7 @@ function createBmlCoach(opts = {}) {
       if (!open) return getView();
 
       const prevCwd = boundCwd;
+      const prevAgent = boundAgentId;
       const { changed } = syncActiveProject({ force: true });
       const onProgress =
         typeof opts.onProgress === "function" ? opts.onProgress : null;
@@ -439,8 +451,13 @@ function createBmlCoach(opts = {}) {
 
       if (!autoProcess) return getView();
 
-      // Keep an in-flight paste confirmation for the same project.
-      if (!changed && state.lastInject?.needsConfirm && prevCwd === boundCwd) {
+      // Keep an in-flight paste confirmation for the same chat.
+      if (
+        !changed &&
+        state.lastInject?.needsConfirm &&
+        prevCwd === boundCwd &&
+        prevAgent === boundAgentId
+      ) {
         return getView();
       }
 

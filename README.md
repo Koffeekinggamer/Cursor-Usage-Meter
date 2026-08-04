@@ -47,12 +47,24 @@ npm run uninstall-autolaunch
 - Double-click to force a refresh
 - Poll interval: `CUM_POLL_MS` (default `60000`)
 
+## Visual proof (Reading → Face)
+
+Automates the Build acceptance check for a non-idle dual-needle Face (numeric Auto/API labels, painted dial — not blank cream):
+
+```bash
+npm run verify-meter-ui          # dedicated Electron verify → tmp/meter-verify.png
+CUM_SELFTEST=1 npm start         # or: npm run selftest → tmp/meter-selftest.{png,json}
+```
+
+Both paths fail closed when labels stay idle em-dashes or the canvas looks unpainted.
+
 ## BML skills coach
 
 The optional **BML** button opens a Build–Measure–Learn coach powered by the
-Matt skills pack. Opening BML (or switching the focused Cursor Agent while
-BML is open) rebinds to that task’s project — local folder or cloud agent’s
+Matt skills pack. Opening BML (or switching the open Cursor Agent chat while
+BML is open) rebinds to that chat’s project — local folder or cloud agent’s
 repo checkout — while the dial keeps polling Cursor usage on its own schedule.
+BML follows **open-chat transcript activity**, not only the Meter workspace.
 
 Running a skill writes the complete prompt to
 `CUM_COPY_FILE` (or Cursor Usage Meter app data), copies it with `pbcopy` on
@@ -65,7 +77,8 @@ and automatically starts the next one. Use **Next now** to skip the wait, or
 manual Continue gate.
 
 ```bash
-npm run bml-run-auto          # /ask-matt router for the active workspace
+npm run bml-run-auto          # /ask-matt for the live open chat (no Meter UI required)
+CUM_BML_CWD=/path/to/app npm run bml-run-auto   # pin a project
 CUM_BML_PASTE=0               # clipboard + activate only (manual ⌘⇧V)
 CUM_BML_SEND=0                # paste but do not press Return
 CUM_BML_AUTO_CONTINUE=0       # pause for Continue instead of auto-next

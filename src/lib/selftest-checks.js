@@ -37,7 +37,7 @@ function evaluateFaceDiag(diag) {
   if (!diag.hasTokenMeter) failures.push("tokenMeter missing (preload failed)");
   if (!diag.hasMeterPaint) failures.push("MeterPaint.drawMeterFace missing");
   if (!diag.canvasW || !diag.canvasH) failures.push("canvas has zero size");
-  if (isIdleLabel(diag.cursorText) && isIdleLabel(diag.otherText)) {
+  if (isIdleLabel(diag.cursorText) || isIdleLabel(diag.otherText)) {
     failures.push(
       `labels still idle (cursor=${diag.cursorText} other=${diag.otherText})`
     );

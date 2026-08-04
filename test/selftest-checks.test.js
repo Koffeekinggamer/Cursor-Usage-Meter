@@ -40,6 +40,21 @@ describe("evaluateFaceDiag", () => {
     assert.ok(r.failures.some((f) => /unpainted/i.test(f)));
   });
 
+  it("fails if either needle label is still idle", () => {
+    const r = evaluateFaceDiag({
+      hasTokenMeter: true,
+      hasMeterPaint: true,
+      cursorText: "30",
+      otherText: "—",
+      canvasW: 200,
+      canvasH: 200,
+      nonCream: 12,
+      total: 100,
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.failures.some((f) => /idle/i.test(f)));
+  });
+
   it("passes for numeric labels and painted dial", () => {
     const r = evaluateFaceDiag({
       hasTokenMeter: true,
